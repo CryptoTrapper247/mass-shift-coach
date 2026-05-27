@@ -1,0 +1,6 @@
+services:
+  - type: worker
+    name: mass-shift-coach
+    runtime: docker
+    plan: starter
+    autoDeploy: true

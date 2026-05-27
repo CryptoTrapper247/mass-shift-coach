@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.massshiftcoach.bot</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/Users/jordanbankz/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node</string>
+      <string>/Users/jordanbankz/Documents/Codex/2026-05-27/look-at-the-grok-tab-thats/src/index.js</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/jordanbankz/Documents/Codex/2026-05-27/look-at-the-grok-tab-thats</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/jordanbankz/Documents/Codex/2026-05-27/look-at-the-grok-tab-thats/logs/mass-shift-coach.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/jordanbankz/Documents/Codex/2026-05-27/look-at-the-grok-tab-thats/logs/mass-shift-coach.err.log</string>
+  </dict>
+</plist>

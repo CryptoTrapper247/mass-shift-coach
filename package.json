@@ -1,0 +1,17 @@
+{
+  "name": "mass-shift-coach-bot",
+  "version": "1.0.0",
+  "description": "A Discord accountability bot for a night-shift mass gain plan.",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "discord.js": "^14.21.0",
+    "dotenv": "^16.4.5"
+  }
+}
