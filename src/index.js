@@ -14,6 +14,7 @@ const { startDashboard } = require("./dashboard");
 const {
   appendAuditLog,
   getUserRecord,
+  mirrorBackup,
   pruneBackups,
   readState,
   writeBackup,
@@ -220,17 +221,22 @@ function startScheduler() {
 function runAutomaticBackup() {
   const state = readState();
   const backupPath = writeBackup(state);
+  const mirrorPath = mirrorBackup(backupPath, config.backupMirrorDir);
   const removed = pruneBackups(config.backupRetentionCount);
   appendAuditLog({
     source: "system",
     action: "automatic-backup",
     targetId: backupPath,
     details: {
+      mirrorPath,
       removedCount: removed.length,
       retentionCount: config.backupRetentionCount,
     },
   });
   console.log(`Automatic backup written to ${backupPath}`);
+  if (mirrorPath) {
+    console.log(`Automatic backup mirrored to ${mirrorPath}`);
+  }
 }
 
 function startAutomaticBackups() {

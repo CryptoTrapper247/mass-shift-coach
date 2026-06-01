@@ -30,6 +30,7 @@ const config = {
   adminUserIds: readList(process.env.ADMIN_USER_IDS),
   automaticBackupHours: readNumber(process.env.AUTOMATIC_BACKUP_HOURS, 24),
   backupRetentionCount: readNumber(process.env.BACKUP_RETENTION_COUNT, 14),
+  backupMirrorDir: process.env.BACKUP_MIRROR_DIR || "",
 };
 
 if (!config.token) {

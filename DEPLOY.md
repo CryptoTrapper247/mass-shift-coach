@@ -21,6 +21,7 @@ This bot is ready to run on either Render or Railway as a background worker.
    - `ADMIN_USER_IDS`
    - `AUTOMATIC_BACKUP_HOURS`
    - `BACKUP_RETENTION_COUNT`
+   - `BACKUP_MIRROR_DIR` if your host has a mounted backup volume
 4. If you expose the dashboard on a cloud host, require `ADMIN_PASSWORD`, HTTPS, and a private route or firewall rule.
 
 ## Render

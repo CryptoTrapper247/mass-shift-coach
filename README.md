@@ -122,6 +122,7 @@ docker run --env-file .env mass-shift-coach
 - Admin slash commands still require Discord's Manage Server permission
 - `AUTOMATIC_BACKUP_HOURS` controls scheduled JSON backups; set it to `0` to disable automatic backups
 - `BACKUP_RETENTION_COUNT` controls how many automatic/manual JSON backups are kept locally
+- `BACKUP_MIRROR_DIR` optionally copies each automatic backup, `audit.log`, and latest state into another folder such as iCloud Drive, Dropbox, Google Drive desktop, or an external drive
 
 ## Token safety
 

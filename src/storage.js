@@ -264,6 +264,25 @@ function pruneBackups(retentionCount) {
   return removed.map((backup) => backup.path);
 }
 
+function mirrorBackup(backupPath, mirrorDir) {
+  if (!mirrorDir) {
+    return null;
+  }
+
+  ensureDir(mirrorDir);
+  const mirrorPath = path.join(mirrorDir, path.basename(backupPath));
+  fs.copyFileSync(backupPath, mirrorPath);
+
+  if (fs.existsSync(AUDIT_LOG_PATH)) {
+    fs.copyFileSync(AUDIT_LOG_PATH, path.join(mirrorDir, "audit.log"));
+  }
+  if (fs.existsSync(STATE_PATH)) {
+    fs.copyFileSync(STATE_PATH, path.join(mirrorDir, "state-latest.json"));
+  }
+
+  return mirrorPath;
+}
+
 function appendAuditLog(event) {
   ensureAppData();
   const entry = {
@@ -313,6 +332,7 @@ module.exports = {
   appendAuditLog,
   ensureDir,
   getUserRecord,
+  mirrorBackup,
   pruneBackups,
   readState,
   writeBackup,
