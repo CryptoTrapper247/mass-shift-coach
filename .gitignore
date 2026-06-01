@@ -3,3 +3,5 @@ node_modules
 data/state.json
 npm-debug.log*
 logs/*.log
+backups/
+exports/

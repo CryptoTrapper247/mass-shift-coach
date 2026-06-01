@@ -18,6 +18,7 @@ const config = {
   weeklySummaryDay: readNumber(process.env.WEEKLY_SUMMARY_DAY, 0),
   weeklySummaryHour: readNumber(process.env.WEEKLY_SUMMARY_HOUR_24, 18),
   weeklySummaryMinute: readNumber(process.env.WEEKLY_SUMMARY_MINUTE, 0),
+  dashboardPort: readNumber(process.env.DASHBOARD_PORT, 3001),
 };
 
 if (!config.token) {

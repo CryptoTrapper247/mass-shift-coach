@@ -1,6 +1,7 @@
-const { ChannelType, SlashCommandBuilder } = require("discord.js");
+const { AttachmentBuilder, ChannelType, SlashCommandBuilder } = require("discord.js");
 const {
-  dailyAudit,
+  buildLeaderboard,
+  exportWeeklyCsv,
   formatDailyAudit,
   formatGoals,
   formatProgram,
@@ -12,7 +13,13 @@ const {
   logWorkout,
   updateCheckIn,
 } = require("./coach");
-const { getUserRecord, readState, writeState } = require("./storage");
+const {
+  getUserRecord,
+  readState,
+  writeBackup,
+  writeState,
+  writeTextExport,
+} = require("./storage");
 
 const commandBuilders = [
   new SlashCommandBuilder()
@@ -109,11 +116,52 @@ const commandBuilders = [
     .setName("summary")
     .setDescription("Get your weekly progress summary."),
   new SlashCommandBuilder()
+    .setName("member-summary")
+    .setDescription("Review another member's weekly summary.")
+    .addUserOption((option) =>
+      option.setName("member").setDescription("Server member to review.").setRequired(true)
+    ),
+  new SlashCommandBuilder()
+    .setName("leaderboard")
+    .setDescription("Show a server leaderboard.")
+    .addStringOption((option) =>
+      option
+        .setName("metric")
+        .setDescription("Ranking metric.")
+        .setRequired(true)
+        .addChoices(
+          { name: "Streak", value: "streak" },
+          { name: "Weekly workouts", value: "workouts" },
+          { name: "Average calories", value: "calories" },
+          { name: "Average protein", value: "protein" },
+          { name: "Weekly shakes", value: "shakes" }
+        )
+    ),
+  new SlashCommandBuilder()
     .setName("nudge")
     .setDescription("Get a direct coaching push."),
   new SlashCommandBuilder()
     .setName("coach")
     .setDescription("Get your smartest next move from the bot right now."),
+  new SlashCommandBuilder()
+    .setName("set-bot-channel")
+    .setDescription("Point bot chatter to a dedicated text channel.")
+    .addChannelOption((option) =>
+      option
+        .setName("channel")
+        .setDescription("Channel for bot posts and admin exports.")
+        .addChannelTypes(ChannelType.GuildText)
+        .setRequired(true)
+    ),
+  new SlashCommandBuilder()
+    .setName("server-status")
+    .setDescription("Admin snapshot of the whole server bot usage."),
+  new SlashCommandBuilder()
+    .setName("backup")
+    .setDescription("Admin backup of the bot state to a JSON file."),
+  new SlashCommandBuilder()
+    .setName("export")
+    .setDescription("Export weekly member stats as CSV."),
   new SlashCommandBuilder()
     .setName("set-reminder-channel")
     .setDescription("Point reminders to a text channel for this server.")
@@ -140,9 +188,48 @@ function getHelpText() {
     "`/today` get today's workout and audit",
     "`/status` get your dashboard",
     "`/summary` get your weekly review",
+    "`/member-summary` review another member",
+    "`/leaderboard` compare server progress",
     "`/coach` get the smartest next move",
     "`/nudge` get a hard push",
+    "`/server-status` admin summary",
+    "`/backup` admin JSON backup",
+    "`/export` export weekly CSV",
+    "`/set-bot-channel` move bot chatter into a dedicated channel",
     "`/set-reminder-channel` move reminders into a better channel",
+  ].join("\n");
+}
+
+function requireManageGuild(interaction) {
+  return interaction.memberPermissions && interaction.memberPermissions.has("ManageGuild");
+}
+
+function adminGuard(interaction) {
+  if (!requireManageGuild(interaction)) {
+    return {
+      content: "You need Manage Server permission for that command.",
+      ephemeral: true,
+    };
+  }
+  return null;
+}
+
+function formatServerStatus(state) {
+  const memberCount = Object.keys(state.users).length;
+  const guildConfigs = Object.keys(state.meta.guilds || {}).length;
+  const reminderChannels = Object.values(state.meta.guilds || {}).filter(
+    (config) => config.reminderChannelId
+  ).length;
+  const botChannels = Object.values(state.meta.guilds || {}).filter(
+    (config) => config.botChannelId
+  ).length;
+
+  return [
+    `Tracked members: ${memberCount}`,
+    `Guild configs: ${guildConfigs}`,
+    `Reminder channels set: ${reminderChannels}`,
+    `Bot channels set: ${botChannels}`,
+    `Programs available: ${Object.keys(state.programs || {}).length}`,
   ].join("\n");
 }
 
@@ -257,18 +344,89 @@ async function handleInteraction(interaction) {
     case "summary":
       await interaction.reply("```text\n" + formatWeeklySummary(interaction.user.username, record, state) + "\n```");
       return;
+    case "member-summary": {
+      const member = interaction.options.getUser("member", true);
+      const targetRecord = getUserRecord(state, member.id);
+      writeState(state);
+      await interaction.reply("```text\n" + formatWeeklySummary(member.username, targetRecord, state) + "\n```");
+      return;
+    }
+    case "leaderboard": {
+      const metric = interaction.options.getString("metric", true);
+      const rows = buildLeaderboard(state, metric).slice(0, 10);
+      const labelMap = {
+        streak: "Streak",
+        workouts: "Weekly workouts",
+        calories: "Average calories",
+        protein: "Average protein",
+        shakes: "Weekly shakes",
+      };
+      const lines = rows.map((row, index) => `${index + 1}. ${row.userId} - ${row.value}`);
+      await interaction.reply(`**${labelMap[metric]} leaderboard**\n` + lines.join("\n"));
+      return;
+    }
     case "nudge":
       await interaction.reply(getNudge(record));
       return;
     case "coach":
       await interaction.reply("```text\n" + formatDailyAudit(record, state) + "\n\n" + formatWeeklySummary(interaction.user.username, record, state) + "\n```");
       return;
+    case "set-bot-channel": {
+      const guard = adminGuard(interaction);
+      if (guard) {
+        await interaction.reply(guard);
+        return;
+      }
+      const channel = interaction.options.getChannel("channel", true);
+      state.meta.guilds[interaction.guildId] = {
+        ...(state.meta.guilds[interaction.guildId] || {}),
+        botChannelId: channel.id,
+      };
+      writeState(state);
+      await interaction.reply(`Bot channel set to <#${channel.id}>.`);
+      return;
+    }
+    case "server-status": {
+      const guard = adminGuard(interaction);
+      if (guard) {
+        await interaction.reply(guard);
+        return;
+      }
+      await interaction.reply("```text\n" + formatServerStatus(state) + "\n```");
+      return;
+    }
+    case "backup": {
+      const guard = adminGuard(interaction);
+      if (guard) {
+        await interaction.reply(guard);
+        return;
+      }
+      const backupPath = writeBackup(state);
+      await interaction.reply({
+        content: `Backup written to ${backupPath}`,
+        files: [new AttachmentBuilder(backupPath)],
+        ephemeral: true,
+      });
+      return;
+    }
+    case "export": {
+      const guard = adminGuard(interaction);
+      if (guard) {
+        await interaction.reply(guard);
+        return;
+      }
+      const csvPath = writeTextExport("weekly-export", exportWeeklyCsv(state));
+      await interaction.reply({
+        content: `Weekly export written to ${csvPath}`,
+        files: [new AttachmentBuilder(csvPath)],
+        ephemeral: true,
+      });
+      return;
+    }
     case "set-reminder-channel": {
-      if (!interaction.memberPermissions || !interaction.memberPermissions.has("ManageGuild")) {
-        await interaction.reply({
-          content: "You need Manage Server permission to change the reminder channel.",
-          ephemeral: true,
-        });
+      const guard = adminGuard(interaction);
+      if (guard) {
+        await interaction.reply(guard);
         return;
       }
 

@@ -11,6 +11,8 @@ Mass Shift Coach is a cleaner Discord bulk-coaching bot built for nightly check-
 - Includes built-in 3-day, 4-day, and 5-day hypertrophy plans
 - Posts daily wake reminders, missed-goal auto-coaching, evening nudges, and weekly progress summaries
 - Generates short coaching feedback based on your recent logs
+- Includes a local dashboard, CSV export, and JSON backup flow
+- Uses macOS Application Support for live state so launchd can run cleanly
 
 ## Slash commands
 
@@ -23,8 +25,14 @@ Mass Shift Coach is a cleaner Discord bulk-coaching bot built for nightly check-
 - `/today`
 - `/status`
 - `/summary`
+- `/member-summary`
+- `/leaderboard`
 - `/coach`
 - `/nudge`
+- `/server-status`
+- `/backup`
+- `/export`
+- `/set-bot-channel`
 - `/set-reminder-channel`
 
 ## Setup
@@ -78,6 +86,21 @@ docker run --env-file .env mass-shift-coach
 - Logs are written to `logs/mass-shift-coach.out.log` and `logs/mass-shift-coach.err.log`
 - Keep the machine powered on and connected
 
+## Local dashboard
+
+- The bot now starts a dashboard on `http://127.0.0.1:3001`
+- Change the port with `DASHBOARD_PORT`
+- JSON endpoints:
+  - `/api/state`
+  - `/api/member/<user_id>`
+
+## Local data location
+
+- Live state is stored at `~/Library/Application Support/MassShiftCoach/state.json`
+- Backups are written under `~/Library/Application Support/MassShiftCoach/backups/`
+- CSV exports are written under `~/Library/Application Support/MassShiftCoach/exports/`
+- If an older `data/state.json` exists, the bot will try to migrate it on first run
+
 ## Token safety
 
 - Never share `.env`
@@ -86,5 +109,5 @@ docker run --env-file .env mass-shift-coach
 
 ## Notes
 
-- State is stored locally in `data/state.json`
+- The launchd bot on macOS should use the Application Support location above for live writes
 - Node 18+ is recommended

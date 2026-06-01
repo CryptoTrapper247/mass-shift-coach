@@ -372,9 +372,70 @@ function formatDailyAudit(record, state) {
   ].join("\n");
 }
 
+function buildLeaderboard(state, metric = "streak") {
+  const rows = Object.entries(state.users).map(([userId, record]) => {
+    const summary = summarizeWeek(record);
+    const values = {
+      streak: record.streak,
+      workouts: summary.workouts,
+      calories: summary.avgCalories || 0,
+      protein: summary.avgProtein || 0,
+      shakes: summary.shakes,
+    };
+    return {
+      userId,
+      value: values[metric] ?? 0,
+      record,
+    };
+  });
+
+  return rows.sort((a, b) => b.value - a.value);
+}
+
+function toCsvRow(columns) {
+  return columns
+    .map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`)
+    .join(",");
+}
+
+function exportWeeklyCsv(state) {
+  const lines = [
+    toCsvRow([
+      "user_id",
+      "streak",
+      "latest_weight",
+      "weekly_workouts",
+      "weekly_shakes",
+      "avg_calories",
+      "avg_protein",
+      "program",
+    ]),
+  ];
+
+  for (const [userId, record] of Object.entries(state.users)) {
+    const summary = summarizeWeek(record);
+    lines.push(
+      toCsvRow([
+        userId,
+        record.streak,
+        summary.latestWeight ?? "",
+        summary.workouts,
+        summary.shakes,
+        summary.avgCalories ?? "",
+        summary.avgProtein ?? "",
+        record.profile.programName || "mass-4-day",
+      ])
+    );
+  }
+
+  return lines.join("\n");
+}
+
 module.exports = {
   coachSignal,
   dailyAudit,
+  buildLeaderboard,
+  exportWeeklyCsv,
   formatGoals,
   formatDailyAudit,
   formatProgram,

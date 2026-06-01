@@ -10,6 +10,7 @@ const {
 } = require("./coach");
 const { commandData, handleInteraction } = require("./commands");
 const { config } = require("./config");
+const { startDashboard } = require("./dashboard");
 const { getUserRecord, readState, writeState } = require("./storage");
 
 const client = new Client({
@@ -68,6 +69,17 @@ function getReminderChannel(state, guild) {
   return guild.channels.cache.get(channelId) || null;
 }
 
+function getBotChannel(state, guild) {
+  const guildConfig = state.meta.guilds?.[guild.id];
+  const channelId =
+    guildConfig?.botChannelId || guildConfig?.reminderChannelId || config.reminderChannelId;
+  if (!channelId) {
+    return null;
+  }
+
+  return guild.channels.cache.get(channelId) || null;
+}
+
 async function sendWakeReminder(guild, channel, state) {
   const mentions = Object.keys(state.users).map((userId) => `<@${userId}>`);
   const prefix = mentions.length ? `${mentions.join(" ")} ` : "";
@@ -118,6 +130,22 @@ async function sendWeeklySummaries(guild, channel, state) {
   await channel.send(summaries.join("\n"));
 }
 
+async function sendDailyCoachingDigest(guild, state) {
+  const channel = getBotChannel(state, guild);
+  if (!channel || channel.type !== ChannelType.GuildText) {
+    return;
+  }
+
+  const rows = Object.keys(state.users).slice(0, 10).map((userId) => {
+    const record = getUserRecord(state, userId);
+    return autoCoachLine(userId, record, state);
+  });
+
+  if (rows.length) {
+    await channel.send(rows.join("\n"));
+  }
+}
+
 async function tickSchedules() {
   const now = zonedParts(new Date(), config.timezone);
   const state = readState();
@@ -152,6 +180,7 @@ async function tickSchedules() {
       state.meta.schedules[eveningKey] !== now.dateKey
     ) {
       await sendEveningNudge(guild, channel, state);
+      await sendDailyCoachingDigest(guild, state);
       state.meta.schedules[eveningKey] = now.dateKey;
     }
 
@@ -194,6 +223,7 @@ async function registerCommands() {
 client.once("clientReady", async () => {
   console.log(`Logged in as ${client.user.tag}`);
   await registerCommands();
+  startDashboard(readState, config.dashboardPort);
   startScheduler();
 });
 

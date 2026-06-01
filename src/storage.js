@@ -1,7 +1,17 @@
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
-const STATE_PATH = path.join(__dirname, "..", "data", "state.json");
+const LEGACY_STATE_PATH = path.join(__dirname, "..", "data", "state.json");
+const APP_DATA_DIR = path.join(
+  os.homedir(),
+  "Library",
+  "Application Support",
+  "MassShiftCoach"
+);
+const STATE_PATH = path.join(APP_DATA_DIR, "state.json");
+const BACKUP_DIR = path.join(APP_DATA_DIR, "backups");
+const EXPORT_DIR = path.join(APP_DATA_DIR, "exports");
 
 function defaultProfile() {
   return {
@@ -161,8 +171,36 @@ function defaultState() {
   };
 }
 
+function ensureDir(dirPath) {
+  fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function ensureAppData() {
+  ensureDir(APP_DATA_DIR);
+}
+
+function seedStateIfNeeded() {
+  ensureAppData();
+
+  if (fs.existsSync(STATE_PATH)) {
+    return;
+  }
+
+  if (fs.existsSync(LEGACY_STATE_PATH)) {
+    try {
+      fs.copyFileSync(LEGACY_STATE_PATH, STATE_PATH);
+      return;
+    } catch (error) {
+      console.warn(`Legacy state migration skipped: ${error.message}`);
+    }
+  }
+
+  fs.writeFileSync(STATE_PATH, JSON.stringify(defaultState(), null, 2));
+}
+
 function readState() {
   try {
+    seedStateIfNeeded();
     const parsed = JSON.parse(fs.readFileSync(STATE_PATH, "utf8"));
     return {
       ...defaultState(),
@@ -187,7 +225,26 @@ function readState() {
 }
 
 function writeState(state) {
+  ensureAppData();
   fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
+}
+
+function timestampLabel(date = new Date()) {
+  return date.toISOString().replace(/[:.]/g, "-");
+}
+
+function writeBackup(state) {
+  ensureDir(BACKUP_DIR);
+  const filePath = path.join(BACKUP_DIR, `state-backup-${timestampLabel()}.json`);
+  fs.writeFileSync(filePath, JSON.stringify(state, null, 2));
+  return filePath;
+}
+
+function writeTextExport(filename, contents) {
+  ensureDir(EXPORT_DIR);
+  const filePath = path.join(EXPORT_DIR, `${filename}-${timestampLabel()}.csv`);
+  fs.writeFileSync(filePath, contents);
+  return filePath;
 }
 
 function getUserRecord(state, userId) {
@@ -211,10 +268,17 @@ function getUserRecord(state, userId) {
 }
 
 module.exports = {
+  APP_DATA_DIR,
+  BACKUP_DIR,
+  EXPORT_DIR,
+  LEGACY_STATE_PATH,
   STATE_PATH,
   defaultState,
   defaultPrograms,
+  ensureDir,
   getUserRecord,
   readState,
+  writeBackup,
+  writeTextExport,
   writeState,
 };
