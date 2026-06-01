@@ -90,6 +90,8 @@ docker run --env-file .env mass-shift-coach
 
 - The bot starts a local control panel on `http://127.0.0.1:3001`
 - Change the port with `DASHBOARD_PORT`
+- Set `ADMIN_PASSWORD` to require a password prompt before anyone can view or use the dashboard
+- The dashboard intentionally binds to `127.0.0.1` only; do not expose it publicly without auth and HTTPS
 - Dashboard controls:
   - Add/select members by Discord user ID
   - Edit goals and active program
@@ -111,7 +113,15 @@ docker run --env-file .env mass-shift-coach
 - Live state is stored at `~/Library/Application Support/MassShiftCoach/state.json`
 - Backups are written under `~/Library/Application Support/MassShiftCoach/backups/`
 - CSV exports are written under `~/Library/Application Support/MassShiftCoach/exports/`
+- Dashboard and admin-command edits are appended to `~/Library/Application Support/MassShiftCoach/audit.log`
 - If an older `data/state.json` exists, the bot will try to migrate it on first run
+
+## Admin and backups
+
+- `ADMIN_USER_IDS` is an optional comma-separated Discord user ID allowlist for admin slash commands
+- Admin slash commands still require Discord's Manage Server permission
+- `AUTOMATIC_BACKUP_HOURS` controls scheduled JSON backups; set it to `0` to disable automatic backups
+- `BACKUP_RETENTION_COUNT` controls how many automatic/manual JSON backups are kept locally
 
 ## Token safety
 

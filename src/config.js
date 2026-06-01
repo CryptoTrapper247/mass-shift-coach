@@ -7,6 +7,13 @@ function readNumber(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function readList(value) {
+  return String(value || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 const config = {
   token: process.env.DISCORD_TOKEN || "",
   reminderChannelId: process.env.REMINDER_CHANNEL_ID || "",
@@ -19,6 +26,10 @@ const config = {
   weeklySummaryHour: readNumber(process.env.WEEKLY_SUMMARY_HOUR_24, 18),
   weeklySummaryMinute: readNumber(process.env.WEEKLY_SUMMARY_MINUTE, 0),
   dashboardPort: readNumber(process.env.DASHBOARD_PORT, 3001),
+  dashboardAdminPassword: process.env.ADMIN_PASSWORD || "",
+  adminUserIds: readList(process.env.ADMIN_USER_IDS),
+  automaticBackupHours: readNumber(process.env.AUTOMATIC_BACKUP_HOURS, 24),
+  backupRetentionCount: readNumber(process.env.BACKUP_RETENTION_COUNT, 14),
 };
 
 if (!config.token) {

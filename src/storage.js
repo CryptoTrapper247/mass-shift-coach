@@ -12,6 +12,7 @@ const APP_DATA_DIR = path.join(
 const STATE_PATH = path.join(APP_DATA_DIR, "state.json");
 const BACKUP_DIR = path.join(APP_DATA_DIR, "backups");
 const EXPORT_DIR = path.join(APP_DATA_DIR, "exports");
+const AUDIT_LOG_PATH = path.join(APP_DATA_DIR, "audit.log");
 
 function defaultProfile() {
   return {
@@ -240,6 +241,39 @@ function writeBackup(state) {
   return filePath;
 }
 
+function pruneBackups(retentionCount) {
+  const keep = Number(retentionCount);
+  if (!Number.isFinite(keep) || keep < 1 || !fs.existsSync(BACKUP_DIR)) {
+    return [];
+  }
+
+  const backups = fs
+    .readdirSync(BACKUP_DIR)
+    .filter((name) => name.startsWith("state-backup-") && name.endsWith(".json"))
+    .map((name) => ({
+      name,
+      path: path.join(BACKUP_DIR, name),
+      mtimeMs: fs.statSync(path.join(BACKUP_DIR, name)).mtimeMs,
+    }))
+    .sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+  const removed = backups.slice(keep);
+  for (const backup of removed) {
+    fs.unlinkSync(backup.path);
+  }
+  return removed.map((backup) => backup.path);
+}
+
+function appendAuditLog(event) {
+  ensureAppData();
+  const entry = {
+    at: new Date().toISOString(),
+    ...event,
+  };
+  fs.appendFileSync(AUDIT_LOG_PATH, JSON.stringify(entry) + "\n");
+  return entry;
+}
+
 function writeTextExport(filename, contents) {
   ensureDir(EXPORT_DIR);
   const filePath = path.join(EXPORT_DIR, `${filename}-${timestampLabel()}.csv`);
@@ -269,14 +303,17 @@ function getUserRecord(state, userId) {
 
 module.exports = {
   APP_DATA_DIR,
+  AUDIT_LOG_PATH,
   BACKUP_DIR,
   EXPORT_DIR,
   LEGACY_STATE_PATH,
   STATE_PATH,
   defaultState,
   defaultPrograms,
+  appendAuditLog,
   ensureDir,
   getUserRecord,
+  pruneBackups,
   readState,
   writeBackup,
   writeTextExport,

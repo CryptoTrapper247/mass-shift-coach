@@ -11,7 +11,14 @@ const {
 const { commandData, handleInteraction } = require("./commands");
 const { config } = require("./config");
 const { startDashboard } = require("./dashboard");
-const { getUserRecord, readState, writeState } = require("./storage");
+const {
+  appendAuditLog,
+  getUserRecord,
+  pruneBackups,
+  readState,
+  writeBackup,
+  writeState,
+} = require("./storage");
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
@@ -210,6 +217,39 @@ function startScheduler() {
   }, 60 * 1000);
 }
 
+function runAutomaticBackup() {
+  const state = readState();
+  const backupPath = writeBackup(state);
+  const removed = pruneBackups(config.backupRetentionCount);
+  appendAuditLog({
+    source: "system",
+    action: "automatic-backup",
+    targetId: backupPath,
+    details: {
+      removedCount: removed.length,
+      retentionCount: config.backupRetentionCount,
+    },
+  });
+  console.log(`Automatic backup written to ${backupPath}`);
+}
+
+function startAutomaticBackups() {
+  const hours = Number(config.automaticBackupHours);
+  if (!Number.isFinite(hours) || hours <= 0) {
+    console.log("Automatic backups disabled.");
+    return;
+  }
+
+  runAutomaticBackup();
+  setInterval(() => {
+    try {
+      runAutomaticBackup();
+    } catch (error) {
+      console.error("Automatic backup failed:", error);
+    }
+  }, hours * 60 * 60 * 1000);
+}
+
 async function registerCommands() {
   const definitions = commandData();
   await Promise.all(
@@ -223,8 +263,14 @@ async function registerCommands() {
 client.once("clientReady", async () => {
   console.log(`Logged in as ${client.user.tag}`);
   await registerCommands();
-  startDashboard(readState, config.dashboardPort);
+  startDashboard(readState, config.dashboardPort, {
+    adminPassword: config.dashboardAdminPassword,
+  });
+  if (!config.dashboardAdminPassword) {
+    console.warn("Dashboard auth is disabled because ADMIN_PASSWORD is not set.");
+  }
   startScheduler();
+  startAutomaticBackups();
 });
 
 client.on("interactionCreate", async (interaction) => {

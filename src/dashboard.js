@@ -1,4 +1,5 @@
 const http = require("http");
+const crypto = require("crypto");
 const { URL } = require("url");
 const {
   exportWeeklyCsv,
@@ -11,6 +12,7 @@ const {
   updateCheckIn,
 } = require("./coach");
 const {
+  appendAuditLog,
   getUserRecord,
   writeBackup,
   writeState,
@@ -28,6 +30,64 @@ function esc(value) {
 function jsonResponse(res, status, payload) {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(payload, null, 2));
+}
+
+function safeEqual(left, right) {
+  const leftBuffer = Buffer.from(String(left || ""));
+  const rightBuffer = Buffer.from(String(right || ""));
+  return (
+    leftBuffer.length === rightBuffer.length &&
+    crypto.timingSafeEqual(leftBuffer, rightBuffer)
+  );
+}
+
+function requestActor(req) {
+  return {
+    ip: req.socket.remoteAddress,
+    userAgent: req.headers["user-agent"] || "",
+  };
+}
+
+function dashboardAuth(req, res, adminPassword) {
+  if (!adminPassword) {
+    return true;
+  }
+
+  const header = req.headers.authorization || "";
+  const [scheme, encoded] = header.split(" ");
+  if (scheme !== "Basic" || !encoded) {
+    res.writeHead(401, {
+      "Content-Type": "text/plain; charset=utf-8",
+      "WWW-Authenticate": 'Basic realm="Mass Shift Coach"',
+    });
+    res.end("Dashboard password required.");
+    return false;
+  }
+
+  let decoded = "";
+  try {
+    decoded = Buffer.from(encoded, "base64").toString("utf8");
+  } catch (error) {
+    decoded = "";
+  }
+
+  const separator = decoded.indexOf(":");
+  const password = separator >= 0 ? decoded.slice(separator + 1) : "";
+  if (safeEqual(password, adminPassword)) {
+    return true;
+  }
+
+  appendAuditLog({
+    source: "dashboard",
+    action: "auth-failed",
+    actor: requestActor(req),
+  });
+  res.writeHead(401, {
+    "Content-Type": "text/plain; charset=utf-8",
+    "WWW-Authenticate": 'Basic realm="Mass Shift Coach"',
+  });
+  res.end("Invalid dashboard password.");
+  return false;
 }
 
 function readBody(req) {
@@ -714,6 +774,16 @@ function renderHtml() {
 </html>`;
 }
 
+function auditDashboard(req, action, targetId, details = {}) {
+  appendAuditLog({
+    source: "dashboard",
+    action,
+    targetId,
+    actor: requestActor(req),
+    details,
+  });
+}
+
 async function handleApi(req, res, state, url) {
   if (req.method === "GET" && url.pathname === "/api/state") {
     jsonResponse(res, 200, stateView(state));
@@ -729,18 +799,21 @@ async function handleApi(req, res, state, url) {
     }
     getUserRecord(state, userId);
     writeState(state);
+    auditDashboard(req, "member-create", userId);
     jsonResponse(res, 201, { member: memberView(userId, state.users[userId], state) });
     return true;
   }
 
   if (req.method === "POST" && url.pathname === "/api/backup") {
     const filePath = writeBackup(state);
+    auditDashboard(req, "backup", filePath);
     jsonResponse(res, 200, { filePath });
     return true;
   }
 
   if (req.method === "POST" && url.pathname === "/api/export") {
     const filePath = writeTextExport("weekly-export", exportWeeklyCsv(state));
+    auditDashboard(req, "export", filePath);
     jsonResponse(res, 200, { filePath });
     return true;
   }
@@ -772,6 +845,9 @@ async function handleApi(req, res, state, url) {
     record.profile.workoutsPerWeek = parseOptionalNumber(body.workoutsPerWeek);
     record.profile.shakesPerDay = parseOptionalNumber(body.shakesPerDay);
     record.profile.programName = state.programs[body.programName] ? body.programName : "mass-4-day";
+    auditDashboard(req, "goals-update", userId, {
+      programName: record.profile.programName,
+    });
   } else if (action === "checkin") {
     const weight = parseOptionalNumber(body.weight);
     if (!weight) {
@@ -779,6 +855,7 @@ async function handleApi(req, res, state, url) {
       return true;
     }
     updateCheckIn(record, weight, body.notes || "");
+    auditDashboard(req, "checkin-log", userId);
   } else if (action === "workout") {
     const note = String(body.note || "").trim();
     if (!note) {
@@ -786,6 +863,7 @@ async function handleApi(req, res, state, url) {
       return true;
     }
     logWorkout(record, note, parseOptionalNumber(body.durationMinutes));
+    auditDashboard(req, "workout-log", userId);
   } else if (action === "meal") {
     const type = body.type === "shake" ? "shake" : "meal";
     logMeal(
@@ -795,6 +873,7 @@ async function handleApi(req, res, state, url) {
       parseOptionalNumber(body.protein),
       body.note || ""
     );
+    auditDashboard(req, "meal-log", userId, { type });
   } else {
     jsonResponse(res, 404, { error: "Unknown member action" });
     return true;
@@ -805,9 +884,13 @@ async function handleApi(req, res, state, url) {
   return true;
 }
 
-function startDashboard(readState, port) {
+function startDashboard(readState, port, options = {}) {
   const server = http.createServer(async (req, res) => {
     try {
+      if (!dashboardAuth(req, res, options.adminPassword)) {
+        return;
+      }
+
       const state = readState();
       const url = new URL(req.url, `http://${req.headers.host}`);
       if (url.pathname.startsWith("/api/")) {

@@ -17,6 +17,11 @@ This bot is ready to run on either Render or Railway as a background worker.
    - `WEEKLY_SUMMARY_DAY`
    - `WEEKLY_SUMMARY_HOUR_24`
    - `WEEKLY_SUMMARY_MINUTE`
+   - `ADMIN_PASSWORD`
+   - `ADMIN_USER_IDS`
+   - `AUTOMATIC_BACKUP_HOURS`
+   - `BACKUP_RETENTION_COUNT`
+4. If you expose the dashboard on a cloud host, require `ADMIN_PASSWORD`, HTTPS, and a private route or firewall rule.
 
 ## Render
 

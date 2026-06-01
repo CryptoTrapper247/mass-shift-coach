@@ -13,7 +13,9 @@ const {
   logWorkout,
   updateCheckIn,
 } = require("./coach");
+const { config } = require("./config");
 const {
+  appendAuditLog,
   getUserRecord,
   readState,
   writeBackup,
@@ -205,6 +207,13 @@ function requireManageGuild(interaction) {
 }
 
 function adminGuard(interaction) {
+  if (config.adminUserIds.length && !config.adminUserIds.includes(interaction.user.id)) {
+    return {
+      content: "You are not on the Mass Shift Coach admin allowlist.",
+      ephemeral: true,
+    };
+  }
+
   if (!requireManageGuild(interaction)) {
     return {
       content: "You need Manage Server permission for that command.",
@@ -345,6 +354,11 @@ async function handleInteraction(interaction) {
       await interaction.reply("```text\n" + formatWeeklySummary(interaction.user.username, record, state) + "\n```");
       return;
     case "member-summary": {
+      const guard = adminGuard(interaction);
+      if (guard) {
+        await interaction.reply(guard);
+        return;
+      }
       const member = interaction.options.getUser("member", true);
       const targetRecord = getUserRecord(state, member.id);
       writeState(state);
@@ -383,6 +397,13 @@ async function handleInteraction(interaction) {
         botChannelId: channel.id,
       };
       writeState(state);
+      appendAuditLog({
+        source: "discord",
+        actorId: interaction.user.id,
+        guildId: interaction.guildId,
+        action: "set-bot-channel",
+        targetId: channel.id,
+      });
       await interaction.reply(`Bot channel set to <#${channel.id}>.`);
       return;
     }
@@ -402,6 +423,13 @@ async function handleInteraction(interaction) {
         return;
       }
       const backupPath = writeBackup(state);
+      appendAuditLog({
+        source: "discord",
+        actorId: interaction.user.id,
+        guildId: interaction.guildId,
+        action: "backup",
+        targetId: backupPath,
+      });
       await interaction.reply({
         content: `Backup written to ${backupPath}`,
         files: [new AttachmentBuilder(backupPath)],
@@ -416,6 +444,13 @@ async function handleInteraction(interaction) {
         return;
       }
       const csvPath = writeTextExport("weekly-export", exportWeeklyCsv(state));
+      appendAuditLog({
+        source: "discord",
+        actorId: interaction.user.id,
+        guildId: interaction.guildId,
+        action: "export",
+        targetId: csvPath,
+      });
       await interaction.reply({
         content: `Weekly export written to ${csvPath}`,
         files: [new AttachmentBuilder(csvPath)],
@@ -436,6 +471,13 @@ async function handleInteraction(interaction) {
         reminderChannelId: channel.id,
       };
       writeState(state);
+      appendAuditLog({
+        source: "discord",
+        actorId: interaction.user.id,
+        guildId: interaction.guildId,
+        action: "set-reminder-channel",
+        targetId: channel.id,
+      });
       await interaction.reply(`Reminder channel set to <#${channel.id}>.`);
       return;
     }
