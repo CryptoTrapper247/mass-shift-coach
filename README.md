@@ -11,7 +11,7 @@ Mass Shift Coach is a cleaner Discord bulk-coaching bot built for nightly check-
 - Includes built-in 3-day, 4-day, and 5-day hypertrophy plans
 - Posts daily wake reminders, missed-goal auto-coaching, evening nudges, and weekly progress summaries
 - Generates short coaching feedback based on your recent logs
-- Includes a local dashboard, CSV export, and JSON backup flow
+- Includes a local control-panel dashboard, CSV export, and JSON backup flow
 - Uses macOS Application Support for live state so launchd can run cleanly
 
 ## Slash commands
@@ -88,11 +88,23 @@ docker run --env-file .env mass-shift-coach
 
 ## Local dashboard
 
-- The bot now starts a dashboard on `http://127.0.0.1:3001`
+- The bot starts a local control panel on `http://127.0.0.1:3001`
 - Change the port with `DASHBOARD_PORT`
+- Dashboard controls:
+  - Add/select members by Discord user ID
+  - Edit goals and active program
+  - Log check-ins, meals, shakes, and workouts
+  - Review daily audits, today's plan, weekly summaries, and recent logs
+  - Create JSON backups and weekly CSV exports
 - JSON endpoints:
   - `/api/state`
   - `/api/member/<user_id>`
+  - `/api/member/<user_id>/goals`
+  - `/api/member/<user_id>/checkin`
+  - `/api/member/<user_id>/workout`
+  - `/api/member/<user_id>/meal`
+  - `/api/backup`
+  - `/api/export`
 
 ## Local data location
 
