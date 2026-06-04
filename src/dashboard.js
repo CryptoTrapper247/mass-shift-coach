@@ -180,18 +180,21 @@ function renderHtml() {
   <title>Mass Shift Coach Dashboard</title>
   <style>
     :root {
-      --bg: #0f1110;
-      --surface: #171a18;
-      --surface-2: #20251f;
-      --surface-3: #283026;
-      --ink: #f3f0e8;
-      --muted: #a9b0a5;
-      --line: #3a4237;
-      --accent: #c7f464;
-      --accent-2: #55c6a6;
+      --bg: #0b0d0b;
+      --surface: #151916;
+      --surface-2: #1c231d;
+      --surface-3: #273224;
+      --ink: #f7f3e8;
+      --muted: #a7b0a4;
+      --line: #303b31;
+      --line-strong: #4d5f49;
+      --accent: #c9f35b;
+      --accent-2: #61d0aa;
       --danger: #ff7a70;
       --warning: #f4bd50;
-      --shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+      --soft-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+      --radius: 18px;
     }
     * { box-sizing: border-box; }
     body {
@@ -199,8 +202,10 @@ function renderHtml() {
       min-height: 100vh;
       font-family: "Avenir Next", "Trebuchet MS", Verdana, sans-serif;
       background:
-        linear-gradient(135deg, rgba(199, 244, 100, 0.08), transparent 42%),
-        repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 80px),
+        radial-gradient(circle at 12% 10%, rgba(201, 243, 91, 0.16), transparent 28%),
+        radial-gradient(circle at 88% 4%, rgba(97, 208, 170, 0.12), transparent 24%),
+        linear-gradient(135deg, rgba(255,255,255,0.035), transparent 44%),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 86px),
         var(--bg);
       color: var(--ink);
     }
@@ -209,31 +214,39 @@ function renderHtml() {
     }
     button {
       border: 1px solid var(--line);
-      background: var(--surface-2);
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)), var(--surface-2);
       color: var(--ink);
-      min-height: 36px;
-      border-radius: 7px;
-      padding: 8px 12px;
+      min-height: 40px;
+      border-radius: 12px;
+      padding: 9px 13px;
       cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, background 140ms ease;
     }
-    button:hover { border-color: var(--accent); }
+    button:hover { border-color: var(--accent); transform: translateY(-1px); }
     button.primary {
-      background: var(--accent);
+      background: linear-gradient(135deg, var(--accent), #ddff83);
       border-color: var(--accent);
       color: #15180f;
       font-weight: 800;
+      box-shadow: 0 10px 28px rgba(201, 243, 91, 0.18);
     }
     button.ghost {
       background: transparent;
     }
     input, select, textarea {
       width: 100%;
-      min-height: 38px;
+      min-height: 42px;
       border: 1px solid var(--line);
-      border-radius: 7px;
-      background: #101310;
+      border-radius: 12px;
+      background: rgba(8, 11, 8, 0.78);
       color: var(--ink);
-      padding: 8px 10px;
+      padding: 10px 12px;
+      outline: none;
+      transition: border-color 140ms ease, box-shadow 140ms ease;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(201, 243, 91, 0.12);
     }
     textarea {
       min-height: 72px;
@@ -243,18 +256,23 @@ function renderHtml() {
       display: grid;
       gap: 6px;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
     }
     .layout {
       display: grid;
-      grid-template-columns: 300px 1fr;
+      grid-template-columns: 320px 1fr;
       min-height: 100vh;
     }
     .sidebar {
       border-right: 1px solid var(--line);
-      background: rgba(15, 17, 16, 0.88);
-      padding: 20px;
+      background:
+        linear-gradient(180deg, rgba(21, 25, 22, 0.94), rgba(11, 13, 11, 0.96)),
+        rgba(15, 17, 16, 0.9);
+      backdrop-filter: blur(18px);
+      padding: 24px;
       position: sticky;
       top: 0;
       height: 100vh;
@@ -268,9 +286,10 @@ function renderHtml() {
       margin-bottom: 20px;
     }
     .brand h1 {
-      font-size: 22px;
+      font-size: 24px;
       line-height: 1.05;
       margin: 0;
+      letter-spacing: -0.04em;
     }
     .status-dot {
       width: 10px;
@@ -283,7 +302,15 @@ function renderHtml() {
     .toolbar {
       display: grid;
       gap: 10px;
-      margin-bottom: 18px;
+      margin-bottom: 20px;
+    }
+    .side-section-title {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin: 24px 0 10px;
     }
     .members {
       display: grid;
@@ -293,7 +320,8 @@ function renderHtml() {
       text-align: left;
       display: grid;
       gap: 4px;
-      border-radius: 7px;
+      border-radius: 14px;
+      padding: 12px;
     }
     .member.active {
       border-color: var(--accent);
@@ -307,7 +335,7 @@ function renderHtml() {
       font-size: 12px;
     }
     main {
-      padding: 22px;
+      padding: 28px;
       overflow: hidden;
     }
     .topline {
@@ -317,15 +345,64 @@ function renderHtml() {
       gap: 16px;
       margin-bottom: 18px;
     }
+    .kicker {
+      color: var(--accent-2);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 7px;
+    }
     .topline h2 {
       margin: 0;
-      font-size: 28px;
+      font-size: clamp(30px, 4vw, 54px);
+      line-height: 0.94;
+      letter-spacing: -0.065em;
     }
     .actions {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       justify-content: flex-end;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(21, 25, 22, 0.74);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .status-pill.online { color: var(--accent); border-color: rgba(201, 243, 91, 0.42); }
+    .ops-bar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .ops-item {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(21, 25, 22, 0.74);
+      padding: 12px 14px;
+      box-shadow: var(--soft-shadow);
+    }
+    .ops-item span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .ops-item strong {
+      font-size: 14px;
+      overflow-wrap: anywhere;
     }
     .grid {
       display: grid;
@@ -334,28 +411,45 @@ function renderHtml() {
       margin-bottom: 16px;
     }
     .stat, .panel {
-      background: rgba(23, 26, 24, 0.92);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.012)),
+        rgba(21, 25, 22, 0.92);
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius);
       box-shadow: var(--shadow);
     }
     .stat {
-      padding: 14px;
+      padding: 16px;
       min-height: 92px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat::after {
+      content: "";
+      position: absolute;
+      inset: auto 14px 12px auto;
+      width: 34px;
+      height: 3px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), transparent);
+      opacity: 0.72;
     }
     .stat span {
       display: block;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
       margin-bottom: 8px;
     }
     .stat strong {
-      font-size: 26px;
+      font-size: 32px;
+      letter-spacing: -0.04em;
       overflow-wrap: anywhere;
     }
     .panel {
-      padding: 16px;
+      padding: 18px;
       min-width: 0;
     }
     .span-2 { grid-column: span 2; }
@@ -363,8 +457,9 @@ function renderHtml() {
     .span-4 { grid-column: span 4; }
     .span-6 { grid-column: span 6; }
     .panel h3 {
-      margin: 0 0 12px;
-      font-size: 16px;
+      margin: 0 0 14px;
+      font-size: 17px;
+      letter-spacing: -0.025em;
     }
     .form-grid {
       display: grid;
@@ -385,9 +480,9 @@ function renderHtml() {
     }
     .log-item {
       border: 1px solid var(--line);
-      border-radius: 7px;
+      border-radius: 14px;
       padding: 10px;
-      background: rgba(0,0,0,0.12);
+      background: rgba(0,0,0,0.16);
     }
     .log-item b {
       display: block;
@@ -404,6 +499,7 @@ function renderHtml() {
       word-break: break-word;
       line-height: 1.45;
       color: #e7eadf;
+      font-size: 13px;
     }
     .notice {
       min-height: 22px;
@@ -417,13 +513,14 @@ function renderHtml() {
         height: auto;
       }
       .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .ops-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .span-2, .span-3, .span-4, .span-6 { grid-column: 1 / -1; }
       .topline { align-items: flex-start; flex-direction: column; }
       .actions { justify-content: flex-start; }
     }
     @media (max-width: 560px) {
       main { padding: 14px; }
-      .grid, .form-grid, .split { grid-template-columns: 1fr; }
+      .grid, .form-grid, .split, .ops-bar { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -442,20 +539,28 @@ function renderHtml() {
         <button id="refresh" class="ghost">Refresh</button>
       </div>
       <div class="notice" id="notice"></div>
-      <h3>Members</h3>
+      <div class="side-section-title">Members</div>
       <div class="members" id="members"></div>
     </aside>
     <main>
       <div class="topline">
         <div>
+          <div class="kicker">Operations Console</div>
           <h2 id="title">Control Panel</h2>
           <div class="notice" id="subtitle">Loading local state...</div>
         </div>
         <div class="actions">
+          <span class="status-pill" id="healthStatus">Checking health</span>
           <button id="backup">Create backup</button>
           <button id="export">Export CSV</button>
         </div>
       </div>
+      <section class="ops-bar">
+        <article class="ops-item"><span>Bot</span><strong id="opsBot">Checking...</strong></article>
+        <article class="ops-item"><span>Uptime</span><strong id="opsUptime">-</strong></article>
+        <article class="ops-item"><span>Guilds</span><strong id="opsGuilds">-</strong></article>
+        <article class="ops-item"><span>Last check</span><strong id="opsChecked">-</strong></article>
+      </section>
       <section class="grid">
         <article class="stat"><span>Tracked users</span><strong id="countUsers">0</strong></article>
         <article class="stat"><span>Check-ins</span><strong id="countCheckIns">0</strong></article>
@@ -568,7 +673,7 @@ function renderHtml() {
     </main>
   </div>
   <script>
-    const state = { data: null, selectedUserId: null };
+    const state = { data: null, health: null, selectedUserId: null };
     const $ = (id) => document.getElementById(id);
 
     function showNotice(message, isError = false) {
@@ -601,6 +706,14 @@ function renderHtml() {
       return new Date(value).toLocaleString();
     }
 
+    function formatUptime(seconds) {
+      const value = Number(seconds) || 0;
+      const hours = Math.floor(value / 3600);
+      const minutes = Math.floor((value % 3600) / 60);
+      if (hours) return hours + "h " + minutes + "m";
+      return minutes + "m";
+    }
+
     function renderLog(targetId, items, formatter) {
       const target = $(targetId);
       if (!items.length) {
@@ -627,6 +740,7 @@ function renderHtml() {
 
     function render() {
       const data = state.data;
+      const health = state.health;
       const members = data.members;
       if (!state.selectedUserId && members.length) {
         state.selectedUserId = members[0].userId;
@@ -638,6 +752,13 @@ function renderHtml() {
       $("countMeals").textContent = data.counts.meals;
       $("countPrograms").textContent = data.counts.programs;
       $("countConfigs").textContent = data.counts.guildConfigs;
+
+      $("healthStatus").textContent = health?.ok ? "Online" : "Needs attention";
+      $("healthStatus").className = "status-pill" + (health?.ok ? " online" : "");
+      $("opsBot").textContent = health?.botTag || "Unknown";
+      $("opsUptime").textContent = health ? formatUptime(health.uptimeSeconds) : "-";
+      $("opsGuilds").textContent = health?.guilds ?? "-";
+      $("opsChecked").textContent = health?.checkedAt ? new Date(health.checkedAt).toLocaleTimeString() : "-";
 
       $("programSelect").innerHTML = Object.entries(data.programs)
         .map(([key, program]) => '<option value="' + escHtml(key) + '">' + escHtml(program.name) + '</option>')
@@ -688,7 +809,12 @@ function renderHtml() {
     }
 
     async function load() {
-      state.data = await api("/api/state");
+      const [data, health] = await Promise.all([
+        api("/api/state"),
+        fetch("/healthz").then((response) => response.json()).catch(() => null),
+      ]);
+      state.data = data;
+      state.health = health;
       render();
     }
 
