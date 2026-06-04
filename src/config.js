@@ -25,12 +25,15 @@ const config = {
   weeklySummaryDay: readNumber(process.env.WEEKLY_SUMMARY_DAY, 0),
   weeklySummaryHour: readNumber(process.env.WEEKLY_SUMMARY_HOUR_24, 18),
   weeklySummaryMinute: readNumber(process.env.WEEKLY_SUMMARY_MINUTE, 0),
-  dashboardPort: readNumber(process.env.DASHBOARD_PORT, 3001),
+  dashboardPort: readNumber(process.env.DASHBOARD_PORT || process.env.PORT, 3001),
+  dashboardHost: process.env.DASHBOARD_HOST || "127.0.0.1",
   dashboardAdminPassword: process.env.ADMIN_PASSWORD || "",
   adminUserIds: readList(process.env.ADMIN_USER_IDS),
   automaticBackupHours: readNumber(process.env.AUTOMATIC_BACKUP_HOURS, 24),
   backupRetentionCount: readNumber(process.env.BACKUP_RETENTION_COUNT, 14),
   backupMirrorDir: process.env.BACKUP_MIRROR_DIR || "",
+  monitorHeartbeatUrl: process.env.MONITOR_HEARTBEAT_URL || "",
+  monitorHeartbeatMinutes: readNumber(process.env.MONITOR_HEARTBEAT_MINUTES, 5),
 };
 
 if (!config.token) {

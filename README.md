@@ -90,8 +90,10 @@ docker run --env-file .env mass-shift-coach
 
 - The bot starts a local control panel on `http://127.0.0.1:3001`
 - Change the port with `DASHBOARD_PORT`
+- Change the bind address with `DASHBOARD_HOST`; keep it as `127.0.0.1` locally and use `0.0.0.0` only on a protected cloud service
 - Set `ADMIN_PASSWORD` to require a password prompt before anyone can view or use the dashboard
-- The dashboard intentionally binds to `127.0.0.1` only; do not expose it publicly without auth and HTTPS
+- The dashboard defaults to `127.0.0.1`; do not expose it publicly without `ADMIN_PASSWORD` and HTTPS
+- `/healthz` returns a safe unauthenticated health check for Docker, Render, Railway, and external uptime monitors
 - Dashboard controls:
   - Add/select members by Discord user ID
   - Edit goals and active program
@@ -111,6 +113,7 @@ docker run --env-file .env mass-shift-coach
 ## Local data location
 
 - Live state is stored at `~/Library/Application Support/MassShiftCoach/state.json`
+- Set `MASS_SHIFT_DATA_DIR` to move live state onto a cloud persistent disk or Railway volume
 - Backups are written under `~/Library/Application Support/MassShiftCoach/backups/`
 - CSV exports are written under `~/Library/Application Support/MassShiftCoach/exports/`
 - Dashboard and admin-command edits are appended to `~/Library/Application Support/MassShiftCoach/audit.log`
@@ -123,6 +126,7 @@ docker run --env-file .env mass-shift-coach
 - `AUTOMATIC_BACKUP_HOURS` controls scheduled JSON backups; set it to `0` to disable automatic backups
 - `BACKUP_RETENTION_COUNT` controls how many automatic/manual JSON backups are kept locally
 - `BACKUP_MIRROR_DIR` optionally copies each automatic backup, `audit.log`, and latest state into another folder such as iCloud Drive, Dropbox, Google Drive desktop, or an external drive
+- `MONITOR_HEARTBEAT_URL` optionally pings an external heartbeat monitor every `MONITOR_HEARTBEAT_MINUTES`
 
 ## Token safety
 

@@ -11,6 +11,7 @@ const {
 const { commandData, handleInteraction } = require("./commands");
 const { config } = require("./config");
 const { startDashboard } = require("./dashboard");
+const { startHeartbeat } = require("./monitoring");
 const {
   appendAuditLog,
   getUserRecord,
@@ -24,6 +25,15 @@ const {
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
+
+function getHealth() {
+  return {
+    ready: client.isReady(),
+    botTag: client.user?.tag || null,
+    guilds: client.guilds.cache.size,
+    uptimeSeconds: Math.round(process.uptime()),
+  };
+}
 
 function zonedParts(date, timezone) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -271,12 +281,38 @@ client.once("clientReady", async () => {
   await registerCommands();
   startDashboard(readState, config.dashboardPort, {
     adminPassword: config.dashboardAdminPassword,
+    health: getHealth,
+    host: config.dashboardHost,
   });
   if (!config.dashboardAdminPassword) {
     console.warn("Dashboard auth is disabled because ADMIN_PASSWORD is not set.");
   }
   startScheduler();
   startAutomaticBackups();
+  startHeartbeat(config, getHealth);
+});
+
+process.on("unhandledRejection", (error) => {
+  appendAuditLog({
+    source: "system",
+    action: "unhandled-rejection",
+    details: {
+      message: error?.message || String(error),
+    },
+  });
+  console.error("Unhandled rejection:", error);
+});
+
+process.on("uncaughtException", (error) => {
+  appendAuditLog({
+    source: "system",
+    action: "uncaught-exception",
+    details: {
+      message: error?.message || String(error),
+    },
+  });
+  console.error("Uncaught exception:", error);
+  process.exit(1);
 });
 
 client.on("interactionCreate", async (interaction) => {

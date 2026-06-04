@@ -3,12 +3,17 @@ const os = require("os");
 const path = require("path");
 
 const LEGACY_STATE_PATH = path.join(__dirname, "..", "data", "state.json");
-const APP_DATA_DIR = path.join(
+const DEFAULT_APP_DATA_DIR = path.join(
   os.homedir(),
   "Library",
   "Application Support",
   "MassShiftCoach"
 );
+const APP_DATA_DIR =
+  process.env.MASS_SHIFT_DATA_DIR ||
+  process.env.RENDER_DISK_MOUNT_PATH ||
+  process.env.RAILWAY_VOLUME_MOUNT_PATH ||
+  DEFAULT_APP_DATA_DIR;
 const STATE_PATH = path.join(APP_DATA_DIR, "state.json");
 const BACKUP_DIR = path.join(APP_DATA_DIR, "backups");
 const EXPORT_DIR = path.join(APP_DATA_DIR, "exports");

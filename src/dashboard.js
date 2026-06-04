@@ -158,6 +158,19 @@ function stateView(state) {
   };
 }
 
+function healthView(health, state) {
+  const snapshot = health ? health() : {};
+  return {
+    ok: Boolean(snapshot.ready),
+    ready: Boolean(snapshot.ready),
+    botTag: snapshot.botTag || null,
+    guilds: snapshot.guilds || 0,
+    uptimeSeconds: Math.round(process.uptime()),
+    members: Object.keys(state.users || {}).length,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
 function renderHtml() {
   return `<!doctype html>
 <html lang="en">
@@ -887,12 +900,18 @@ async function handleApi(req, res, state, url) {
 function startDashboard(readState, port, options = {}) {
   const server = http.createServer(async (req, res) => {
     try {
+      const state = readState();
+      const url = new URL(req.url, `http://${req.headers.host}`);
+      if (url.pathname === "/healthz") {
+        const health = healthView(options.health, state);
+        jsonResponse(res, health.ok ? 200 : 503, health);
+        return;
+      }
+
       if (!dashboardAuth(req, res, options.adminPassword)) {
         return;
       }
 
-      const state = readState();
-      const url = new URL(req.url, `http://${req.headers.host}`);
       if (url.pathname.startsWith("/api/")) {
         const handled = await handleApi(req, res, state, url);
         if (!handled) {
@@ -908,8 +927,9 @@ function startDashboard(readState, port, options = {}) {
     }
   });
 
-  server.listen(port, "127.0.0.1", () => {
-    console.log(`Dashboard listening on http://127.0.0.1:${port}`);
+  const host = options.host || "127.0.0.1";
+  server.listen(port, host, () => {
+    console.log(`Dashboard listening on http://${host}:${port}`);
   });
 
   return server;

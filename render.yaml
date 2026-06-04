@@ -1,6 +1,32 @@
 services:
-  - type: worker
+  - type: web
     name: mass-shift-coach
     runtime: docker
     plan: starter
     autoDeploy: true
+    healthCheckPath: /healthz
+    disk:
+      name: mass-shift-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: MASS_SHIFT_DATA_DIR
+        value: /var/data
+      - key: DASHBOARD_HOST
+        value: 0.0.0.0
+      - key: TIMEZONE
+        value: America/Toronto
+      - key: AUTOMATIC_BACKUP_HOURS
+        value: 24
+      - key: BACKUP_RETENTION_COUNT
+        value: 30
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_USER_IDS
+        sync: false
+      - key: REMINDER_CHANNEL_ID
+        sync: false
+      - key: MONITOR_HEARTBEAT_URL
+        sync: false
