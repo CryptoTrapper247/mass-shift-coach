@@ -180,21 +180,22 @@ function renderHtml() {
   <title>Mass Shift Coach Dashboard</title>
   <style>
     :root {
-      --bg: #0b0d0b;
-      --surface: #151916;
-      --surface-2: #1c231d;
-      --surface-3: #273224;
-      --ink: #f7f3e8;
-      --muted: #a7b0a4;
-      --line: #303b31;
-      --line-strong: #4d5f49;
-      --accent: #c9f35b;
-      --accent-2: #61d0aa;
+      --bg: #050505;
+      --surface: #0d120d;
+      --surface-2: #152014;
+      --surface-3: #20341d;
+      --ink: #f4ffe8;
+      --muted: #aebca8;
+      --line: #30412c;
+      --line-strong: #638456;
+      --accent: #b8ff3d;
+      --accent-2: #50d77a;
       --danger: #ff7a70;
-      --warning: #f4bd50;
-      --shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
-      --soft-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
-      --radius: 18px;
+      --warning: #d7ff63;
+      --shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
+      --soft-shadow: 0 16px 44px rgba(0, 0, 0, 0.32);
+      --glow: 0 0 34px rgba(184, 255, 61, 0.2);
+      --radius: 20px;
     }
     * { box-sizing: border-box; }
     body {
@@ -202,33 +203,52 @@ function renderHtml() {
       min-height: 100vh;
       font-family: "Avenir Next", "Trebuchet MS", Verdana, sans-serif;
       background:
-        radial-gradient(circle at 12% 10%, rgba(201, 243, 91, 0.16), transparent 28%),
-        radial-gradient(circle at 88% 4%, rgba(97, 208, 170, 0.12), transparent 24%),
-        linear-gradient(135deg, rgba(255,255,255,0.035), transparent 44%),
-        repeating-linear-gradient(90deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 86px),
+        radial-gradient(circle at 16% 10%, rgba(184, 255, 61, 0.18), transparent 26%),
+        radial-gradient(circle at 88% 2%, rgba(80, 215, 122, 0.12), transparent 24%),
+        linear-gradient(135deg, rgba(184, 255, 61, 0.055), transparent 38%),
+        repeating-linear-gradient(135deg, rgba(184, 255, 61, 0.035) 0, rgba(184, 255, 61, 0.035) 1px, transparent 1px, transparent 14px),
+        linear-gradient(115deg, transparent 0 46%, rgba(184, 255, 61, 0.035) 46% 48%, transparent 48% 100%),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 92px),
         var(--bg);
       color: var(--ink);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(184, 255, 61, 0.08), transparent 18%, transparent 82%, rgba(184, 255, 61, 0.06)),
+        radial-gradient(circle at 50% -20%, rgba(255,255,255,0.08), transparent 38%);
+      mix-blend-mode: screen;
+      opacity: 0.55;
     }
     button, input, select, textarea {
       font: inherit;
     }
     button {
       border: 1px solid var(--line);
-      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)), var(--surface-2);
+      background:
+        linear-gradient(180deg, rgba(184, 255, 61, 0.08), rgba(0,0,0,0.08)),
+        var(--surface-2);
       color: var(--ink);
       min-height: 40px;
       border-radius: 12px;
       padding: 9px 13px;
       cursor: pointer;
-      transition: border-color 140ms ease, transform 140ms ease, background 140ms ease;
+      transition: border-color 140ms ease, transform 140ms ease, background 140ms ease, box-shadow 140ms ease;
     }
-    button:hover { border-color: var(--accent); transform: translateY(-1px); }
-    button.primary {
-      background: linear-gradient(135deg, var(--accent), #ddff83);
+    button:hover {
       border-color: var(--accent);
-      color: #15180f;
-      font-weight: 800;
-      box-shadow: 0 10px 28px rgba(201, 243, 91, 0.18);
+      transform: translateY(-1px);
+      box-shadow: 0 10px 26px rgba(184, 255, 61, 0.12);
+    }
+    button.primary {
+      background: linear-gradient(135deg, #d8ff78, var(--accent) 54%, #50d77a);
+      border-color: var(--accent);
+      color: #071007;
+      font-weight: 900;
+      box-shadow: 0 13px 34px rgba(184, 255, 61, 0.24);
     }
     button.ghost {
       background: transparent;
@@ -238,7 +258,7 @@ function renderHtml() {
       min-height: 42px;
       border: 1px solid var(--line);
       border-radius: 12px;
-      background: rgba(8, 11, 8, 0.78);
+      background: rgba(2, 2, 2, 0.76);
       color: var(--ink);
       padding: 10px 12px;
       outline: none;
@@ -246,7 +266,7 @@ function renderHtml() {
     }
     input:focus, select:focus, textarea:focus {
       border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(201, 243, 91, 0.12);
+      box-shadow: 0 0 0 3px rgba(184, 255, 61, 0.16), var(--glow);
     }
     textarea {
       min-height: 72px;
@@ -269,8 +289,9 @@ function renderHtml() {
     .sidebar {
       border-right: 1px solid var(--line);
       background:
-        linear-gradient(180deg, rgba(21, 25, 22, 0.94), rgba(11, 13, 11, 0.96)),
-        rgba(15, 17, 16, 0.9);
+        linear-gradient(180deg, rgba(17, 16, 12, 0.96), rgba(5, 5, 5, 0.98)),
+        repeating-linear-gradient(135deg, rgba(184, 255, 61, 0.045) 0, rgba(184, 255, 61, 0.045) 1px, transparent 1px, transparent 12px),
+        rgba(5, 5, 5, 0.94);
       backdrop-filter: blur(18px);
       padding: 24px;
       position: sticky;
@@ -291,12 +312,24 @@ function renderHtml() {
       margin: 0;
       letter-spacing: -0.04em;
     }
+    .brand h1::after {
+      content: "GROW MODE";
+      display: block;
+      width: fit-content;
+      margin-top: 7px;
+      padding: 4px 8px;
+      border: 1px solid rgba(184, 255, 61, 0.34);
+      border-radius: 999px;
+      color: var(--accent);
+      font-size: 10px;
+      letter-spacing: 0.16em;
+    }
     .status-dot {
       width: 10px;
       height: 10px;
       border-radius: 999px;
       background: var(--accent);
-      box-shadow: 0 0 16px var(--accent);
+      box-shadow: 0 0 16px var(--accent), 0 0 42px rgba(184, 255, 61, 0.28);
       flex: 0 0 auto;
     }
     .toolbar {
@@ -322,10 +355,24 @@ function renderHtml() {
       gap: 4px;
       border-radius: 14px;
       padding: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+    .member::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: linear-gradient(180deg, var(--accent), transparent);
+      opacity: 0;
+      transition: opacity 140ms ease;
     }
     .member.active {
       border-color: var(--accent);
-      background: rgba(199, 244, 100, 0.1);
+      background: rgba(184, 255, 61, 0.12);
+    }
+    .member.active::before, .member:hover::before {
+      opacity: 1;
     }
     .member strong {
       overflow-wrap: anywhere;
@@ -337,6 +384,18 @@ function renderHtml() {
     main {
       padding: 28px;
       overflow: hidden;
+      position: relative;
+    }
+    main::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(184, 255, 61, 0.065), transparent 220px);
+    }
+    main > * {
+      position: relative;
+      z-index: 1;
     }
     .topline {
       display: flex;
@@ -346,7 +405,7 @@ function renderHtml() {
       margin-bottom: 18px;
     }
     .kicker {
-      color: var(--accent-2);
+      color: var(--accent);
       font-size: 12px;
       font-weight: 900;
       letter-spacing: 0.12em;
@@ -358,6 +417,7 @@ function renderHtml() {
       font-size: clamp(30px, 4vw, 54px);
       line-height: 0.94;
       letter-spacing: -0.065em;
+      text-shadow: 0 16px 44px rgba(0, 0, 0, 0.42);
     }
     .actions {
       display: flex;
@@ -373,11 +433,15 @@ function renderHtml() {
       border: 1px solid var(--line);
       border-radius: 999px;
       color: var(--muted);
-      background: rgba(21, 25, 22, 0.74);
+      background: rgba(12, 11, 7, 0.84);
       font-size: 12px;
       font-weight: 800;
     }
-    .status-pill.online { color: var(--accent); border-color: rgba(201, 243, 91, 0.42); }
+    .status-pill.online {
+      color: var(--accent);
+      border-color: rgba(184, 255, 61, 0.5);
+      box-shadow: var(--glow);
+    }
     .ops-bar {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -387,9 +451,17 @@ function renderHtml() {
     .ops-item {
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      background: rgba(21, 25, 22, 0.74);
+      background:
+        linear-gradient(145deg, rgba(184, 255, 61, 0.08), rgba(255,255,255,0.01)),
+        rgba(12, 11, 7, 0.82);
       padding: 12px 14px;
       box-shadow: var(--soft-shadow);
+      transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+    }
+    .ops-item:hover {
+      transform: translateY(-2px);
+      border-color: rgba(184, 255, 61, 0.5);
+      box-shadow: var(--shadow), var(--glow);
     }
     .ops-item span {
       display: block;
@@ -412,11 +484,17 @@ function renderHtml() {
     }
     .stat, .panel {
       background:
-        linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.012)),
-        rgba(21, 25, 22, 0.92);
+        linear-gradient(145deg, rgba(184, 255, 61, 0.085), rgba(255,255,255,0.012) 42%, rgba(0,0,0,0.18)),
+        rgba(12, 11, 7, 0.92);
       border: 1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
+      transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+    }
+    .stat:hover, .panel:hover {
+      transform: translateY(-2px);
+      border-color: rgba(184, 255, 61, 0.46);
+      box-shadow: var(--shadow), var(--glow);
     }
     .stat {
       padding: 16px;
@@ -428,11 +506,19 @@ function renderHtml() {
       content: "";
       position: absolute;
       inset: auto 14px 12px auto;
-      width: 34px;
+      width: 44px;
       height: 3px;
       border-radius: 999px;
       background: linear-gradient(90deg, var(--accent), transparent);
       opacity: 0.72;
+    }
+    .stat::before {
+      content: "";
+      position: absolute;
+      inset: auto 14px 18px 14px;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(184,255,61,0.86), rgba(184,255,61,0.08));
+      opacity: 0.52;
     }
     .stat span {
       display: block;
@@ -444,13 +530,23 @@ function renderHtml() {
       margin-bottom: 8px;
     }
     .stat strong {
-      font-size: 32px;
+      font-size: 36px;
       letter-spacing: -0.04em;
       overflow-wrap: anywhere;
     }
     .panel {
       padding: 18px;
       min-width: 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), rgba(80, 215, 122, 0.2), transparent);
+      opacity: 0.78;
     }
     .span-2 { grid-column: span 2; }
     .span-3 { grid-column: span 3; }
@@ -482,7 +578,14 @@ function renderHtml() {
       border: 1px solid var(--line);
       border-radius: 14px;
       padding: 10px;
-      background: rgba(0,0,0,0.16);
+      background:
+        linear-gradient(90deg, rgba(184, 255, 61, 0.06), transparent 32%),
+        rgba(0,0,0,0.2);
+      transition: border-color 140ms ease, transform 140ms ease;
+    }
+    .log-item:hover {
+      border-color: rgba(184, 255, 61, 0.45);
+      transform: translateX(2px);
     }
     .log-item b {
       display: block;
@@ -498,7 +601,7 @@ function renderHtml() {
       white-space: pre-wrap;
       word-break: break-word;
       line-height: 1.45;
-      color: #e7eadf;
+      color: #eaffd2;
       font-size: 13px;
     }
     .notice {
