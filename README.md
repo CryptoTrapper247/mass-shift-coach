@@ -28,10 +28,17 @@ Mass Shift Coach is a cleaner Discord bulk-coaching bot built for nightly check-
 - `/member-summary`
 - `/leaderboard`
 - `/coach`
+- `/profile`
+- `/delete-log`
 - `/nudge`
+- `/admin-activity`
+- `/coach-settings`
+- `/dev-status`
+- `/dev-logs`
 - `/server-status`
 - `/backup`
 - `/export`
+- `/set-dev-alert-channel`
 - `/set-bot-channel`
 - `/set-reminder-channel`
 
@@ -99,6 +106,7 @@ docker run --env-file .env mass-shift-coach
   - Edit goals and active program
   - Log check-ins, meals, shakes, and workouts
   - Review daily audits, today's plan, weekly summaries, and recent logs
+  - Review the Dev Ops panel for Git version, backup freshness, alert-channel status, latest errors, and filtered dev events
   - Create JSON backups and weekly CSV exports
 - JSON endpoints:
   - `/api/state`
@@ -127,6 +135,8 @@ docker run --env-file .env mass-shift-coach
 - `BACKUP_RETENTION_COUNT` controls how many automatic/manual JSON backups are kept locally
 - `BACKUP_MIRROR_DIR` optionally copies each automatic backup, `audit.log`, and latest state into another folder such as iCloud Drive, Dropbox, Google Drive desktop, or an external drive
 - `MONITOR_HEARTBEAT_URL` optionally pings an external heartbeat monitor every `MONITOR_HEARTBEAT_MINUTES`
+- `DEV_ALERT_CHANNEL_ID` optionally sets a fallback Discord channel for important-only dev alerts; `/set-dev-alert-channel` is preferred per server
+- Dev alerts are intentionally quiet: restart, backup failure, dashboard server error, Discord client/login issue, and crash/unhandled rejection
 
 ## Token safety
 

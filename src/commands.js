@@ -15,6 +15,11 @@ const {
 } = require("./coach");
 const { config } = require("./config");
 const {
+  buildDevSnapshot,
+  formatDevStatus,
+  latestDevEvents,
+} = require("./devops");
+const {
   appendAuditLog,
   getUserRecord,
   readAuditLog,
@@ -179,6 +184,27 @@ const commandBuilders = [
     .setName("coach-settings")
     .setDescription("Show server channels and schedule settings."),
   new SlashCommandBuilder()
+    .setName("dev-status")
+    .setDescription("Admin dev health: uptime, backups, errors, git, and readiness."),
+  new SlashCommandBuilder()
+    .setName("dev-logs")
+    .setDescription("Admin dev log/audit search for important events.")
+    .addStringOption((option) =>
+      option
+        .setName("filter")
+        .setDescription("Filter by error, backup, command, login, restart, etc.")
+    ),
+  new SlashCommandBuilder()
+    .setName("set-dev-alert-channel")
+    .setDescription("Set the quiet admin channel for important dev alerts.")
+    .addChannelOption((option) =>
+      option
+        .setName("channel")
+        .setDescription("Channel for restarts, backup failures, crashes, and login issues.")
+        .addChannelTypes(ChannelType.GuildText)
+        .setRequired(true)
+    ),
+  new SlashCommandBuilder()
     .setName("set-bot-channel")
     .setDescription("Point bot chatter to a dedicated text channel.")
     .addChannelOption((option) =>
@@ -231,6 +257,9 @@ function getHelpText() {
     "`/nudge` get a hard push",
     "`/admin-activity` admin audit log",
     "`/coach-settings` admin schedule/channel settings",
+    "`/dev-status` admin dev health",
+    "`/dev-logs` admin filtered dev events",
+    "`/set-dev-alert-channel` admin alert channel",
     "`/server-status` admin summary",
     "`/backup` admin JSON backup",
     "`/export` export weekly CSV",
@@ -336,11 +365,28 @@ function formatCoachSettings(state, guildId) {
     `Weekly summary day/hour: ${config.weeklySummaryDay} @ ${config.weeklySummaryHour}:${String(config.weeklySummaryMinute).padStart(2, "0")}`,
     `Bot channel: ${guildConfig.botChannelId ? `<#${guildConfig.botChannelId}>` : "not set"}`,
     `Reminder channel: ${guildConfig.reminderChannelId ? `<#${guildConfig.reminderChannelId}>` : config.reminderChannelId || "not set"}`,
+    `Dev alert channel: ${guildConfig.devAlertChannelId ? `<#${guildConfig.devAlertChannelId}>` : config.devAlertChannelId ? `<#${config.devAlertChannelId}>` : "not set"}`,
     `Tracked members: ${Object.keys(state.users || {}).length}`,
   ].join("\n");
 }
 
-async function handleInteraction(interaction) {
+function formatDevEvents(filter = "", limit = 10) {
+  const events = latestDevEvents(filter, limit);
+  if (!events.length) {
+    return "No matching dev events.";
+  }
+
+  return events
+    .map((event) => {
+      const at = event.at ? new Date(event.at).toLocaleString() : "log";
+      const label = [event.source, event.action].filter(Boolean).join("/");
+      const detail = event.message || event.targetId || "";
+      return `${at} - ${label}${detail ? ` - ${detail}` : ""}`;
+    })
+    .join("\n");
+}
+
+async function handleInteraction(interaction, context = {}) {
   if (!interaction.isChatInputCommand()) {
     return;
   }
@@ -554,6 +600,51 @@ async function handleInteraction(interaction) {
         return;
       }
       await interaction.reply({ content: "```text\n" + formatCoachSettings(state, interaction.guildId) + "\n```", ephemeral: true });
+      return;
+    }
+    case "dev-status": {
+      const guard = adminGuard(interaction);
+      if (guard) {
+        await interaction.reply(guard);
+        return;
+      }
+      const snapshot = buildDevSnapshot(context.getHealth ? context.getHealth() : {});
+      await interaction.reply({ content: "```text\n" + formatDevStatus(snapshot) + "\n```", ephemeral: true });
+      return;
+    }
+    case "dev-logs": {
+      const guard = adminGuard(interaction);
+      if (guard) {
+        await interaction.reply(guard);
+        return;
+      }
+      const filter = interaction.options.getString("filter") || "";
+      await interaction.reply({ content: "```text\n" + formatDevEvents(filter, 12) + "\n```", ephemeral: true });
+      return;
+    }
+    case "set-dev-alert-channel": {
+      const guard = adminGuard(interaction);
+      if (guard) {
+        await interaction.reply(guard);
+        return;
+      }
+      const channel = interaction.options.getChannel("channel", true);
+      state.meta.guilds[interaction.guildId] = {
+        ...(state.meta.guilds[interaction.guildId] || {}),
+        devAlertChannelId: channel.id,
+      };
+      writeState(state);
+      appendAuditLog({
+        source: "discord",
+        actorId: interaction.user.id,
+        guildId: interaction.guildId,
+        action: "set-dev-alert-channel",
+        targetId: channel.id,
+      });
+      await interaction.reply({
+        content: `Dev alert channel set to <#${channel.id}>. I will keep alerts important-only.`,
+        ephemeral: true,
+      });
       return;
     }
     case "set-bot-channel": {

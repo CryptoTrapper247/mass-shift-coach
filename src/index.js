@@ -46,6 +46,11 @@ function startLocalDashboard() {
     adminPassword: config.dashboardAdminPassword,
     health: getHealth,
     host: config.dashboardHost,
+    onError: (error) => {
+      sendDevAlert("Dashboard unhealthy", error.message).catch((alertError) => {
+        console.error("Dev alert failed:", alertError);
+      });
+    },
   });
   if (!config.dashboardAdminPassword) {
     console.warn("Dashboard auth is disabled because ADMIN_PASSWORD is not set.");
@@ -113,6 +118,37 @@ function getBotChannel(state, guild) {
   }
 
   return guild.channels.cache.get(channelId) || null;
+}
+
+async function getDevAlertChannel(state, guild) {
+  const guildConfig = state.meta.guilds?.[guild.id];
+  const channelId = guildConfig?.devAlertChannelId || config.devAlertChannelId;
+  if (!channelId) {
+    return null;
+  }
+
+  return guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null);
+}
+
+async function sendDevAlert(title, body = "") {
+  appendAuditLog({
+    source: "system",
+    action: "dev-alert",
+    details: { title, body },
+  });
+
+  if (!client.isReady()) {
+    return;
+  }
+
+  const state = readState();
+  for (const guild of client.guilds.cache.values()) {
+    const channel = await getDevAlertChannel(state, guild);
+    if (!channel || channel.type !== ChannelType.GuildText) {
+      continue;
+    }
+    await channel.send(`**Mass Shift Dev Alert: ${title}**${body ? `\n${body}` : ""}`);
+  }
 }
 
 async function sendWakeReminder(guild, channel, state) {
@@ -279,6 +315,9 @@ function startAutomaticBackups() {
       runAutomaticBackup();
     } catch (error) {
       console.error("Automatic backup failed:", error);
+      sendDevAlert("Backup failed", error.message).catch((alertError) => {
+        console.error("Dev alert failed:", alertError);
+      });
     }
   }, hours * 60 * 60 * 1000);
 }
@@ -296,6 +335,7 @@ async function registerCommands() {
 client.once("clientReady", async () => {
   console.log(`Logged in as ${client.user.tag}`);
   await registerCommands();
+  await sendDevAlert("Bot restarted", `${client.user.tag} is online on ${client.guilds.cache.size} server(s).`);
   startScheduler();
   startAutomaticBackups();
   startHeartbeat(config, getHealth);
@@ -310,6 +350,9 @@ process.on("unhandledRejection", (error) => {
     },
   });
   console.error("Unhandled rejection:", error);
+  sendDevAlert("Unhandled rejection", error?.message || String(error)).catch((alertError) => {
+    console.error("Dev alert failed:", alertError);
+  });
 });
 
 process.on("uncaughtException", (error) => {
@@ -321,12 +364,29 @@ process.on("uncaughtException", (error) => {
     },
   });
   console.error("Uncaught exception:", error);
-  process.exit(1);
+  sendDevAlert("Unhandled crash", error?.message || String(error))
+    .catch((alertError) => {
+      console.error("Dev alert failed:", alertError);
+    })
+    .finally(() => {
+      setTimeout(() => process.exit(1), 750);
+    });
+});
+
+client.on("error", (error) => {
+  appendAuditLog({
+    source: "discord",
+    action: "client-error",
+    details: { message: error?.message || String(error) },
+  });
+  sendDevAlert("Discord client error", error?.message || String(error)).catch((alertError) => {
+    console.error("Dev alert failed:", alertError);
+  });
 });
 
 client.on("interactionCreate", async (interaction) => {
   try {
-    await handleInteraction(interaction);
+    await handleInteraction(interaction, { getHealth });
   } catch (error) {
     console.error("Interaction failure:", error);
     if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
@@ -339,4 +399,11 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 startLocalDashboard();
-client.login(config.token);
+client.login(config.token).catch((error) => {
+  appendAuditLog({
+    source: "discord",
+    action: "login-failed",
+    details: { message: error?.message || String(error) },
+  });
+  console.error("Discord login failed:", error);
+});

@@ -12,6 +12,10 @@ const {
   updateCheckIn,
 } = require("./coach");
 const {
+  buildDevSnapshot,
+  latestDevEvents,
+} = require("./devops");
+const {
   appendAuditLog,
   getUserRecord,
   readAuditLog,
@@ -180,12 +184,17 @@ function memberView(userId, record, state) {
   };
 }
 
-function stateView(state) {
+function stateView(state, health) {
   const members = Object.entries(state.users).map(([userId, record]) => memberView(userId, record, state));
+  const healthSnapshot = health ? health() : {};
   return {
     meta: state.meta,
     programs: state.programs,
     activity: readAuditLog(30),
+    devOps: {
+      snapshot: buildDevSnapshot(healthSnapshot),
+      events: latestDevEvents("", 12),
+    },
     members,
     counts: {
       users: members.length,
@@ -741,6 +750,29 @@ function renderHtml() {
           <div class="log" id="activityLog"></div>
         </section>
 
+        <section class="panel span-6">
+          <h3>Dev Ops</h3>
+          <section class="ops-bar">
+            <article class="ops-item"><span>Git</span><strong id="devGit">-</strong></article>
+            <article class="ops-item"><span>Backup</span><strong id="devBackup">-</strong></article>
+            <article class="ops-item"><span>Mirror</span><strong id="devMirror">-</strong></article>
+            <article class="ops-item"><span>Alert Channel</span><strong id="devAlert">-</strong></article>
+          </section>
+          <div class="split">
+            <div>
+              <h3>Last Error</h3>
+              <pre id="devLastError">No error found.</pre>
+            </div>
+            <div>
+              <h3>Dev Events</h3>
+              <label>Filter
+                <input id="devEventFilter" placeholder="error, backup, command, login" />
+              </label>
+              <div class="log" id="devEvents"></div>
+            </div>
+          </div>
+        </section>
+
         <section class="panel span-3">
           <h3>Goals</h3>
           <form id="goalsForm" class="form-grid">
@@ -927,6 +959,39 @@ function renderHtml() {
       }).join("");
     }
 
+    function ageLabel(minutes) {
+      if (minutes === null || minutes === undefined) return "missing";
+      if (minutes < 60) return minutes + "m ago";
+      return Math.round(minutes / 60) + "h ago";
+    }
+
+    function renderDevOps(devOps) {
+      const snapshot = devOps?.snapshot || {};
+      const backup = snapshot.backup?.latest;
+      const mirror = snapshot.backup?.mirrorLatest;
+      const lastError = snapshot.lastError;
+      $("devGit").textContent = snapshot.git ? snapshot.git.branch + "@" + snapshot.git.sha : "unknown";
+      $("devBackup").textContent = backup ? (snapshot.backup.ok ? "fresh " : "stale ") + ageLabel(backup.ageMinutes) : "missing";
+      $("devMirror").textContent = mirror ? (mirror.exists ? "present " : "missing ") + ageLabel(mirror.ageMinutes) : "not configured";
+      $("devAlert").textContent = snapshot.devAlertChannelId || "server setting/env";
+      $("devLastError").textContent = lastError
+        ? [lastError.source, lastError.action, lastError.message || lastError.targetId || ""].filter(Boolean).join(" / ")
+        : "No error found.";
+
+      const filter = $("devEventFilter").value.trim().toLowerCase();
+      const events = (devOps?.events || []).filter((event) => {
+        if (!filter) return true;
+        return [event.source, event.action, event.targetId, event.message].join(" ").toLowerCase().includes(filter);
+      });
+      $("devEvents").innerHTML = events.length
+        ? events.map((event) => {
+          const label = [event.source, event.action].filter(Boolean).join(" / ");
+          const detail = event.message || event.targetId || "";
+          return '<div class="log-item"><b>' + escHtml(event.at ? formatDate(event.at) : "log") + '</b><span>' + escHtml(label) + (detail ? ' | ' + escHtml(detail) : '') + '</span></div>';
+        }).join("")
+        : '<div class="empty">No matching dev events.</div>';
+    }
+
     function render() {
       const data = state.data;
       const health = state.health;
@@ -976,6 +1041,7 @@ function renderHtml() {
       fillProfile(member);
       fillGoals(member);
       renderActivity(data.activity);
+      renderDevOps(data.devOps);
       $("weeklySummary").textContent = member ? member.weeklySummary : "Select or add a member.";
       $("dailyAudit").textContent = member ? member.dailyAudit : "Select or add a member.";
       $("todayPlan").textContent = member ? member.todayPlan : "Select or add a member.";
@@ -1102,6 +1168,7 @@ function renderHtml() {
         body: JSON.stringify({ displayName: form.get("displayName") }),
       }));
     });
+    $("devEventFilter").addEventListener("input", render);
     document.addEventListener("click", async (event) => {
       const button = event.target.closest("[data-log-action]");
       if (!button) return;
@@ -1188,9 +1255,9 @@ function auditDashboard(req, action, targetId, details = {}) {
   });
 }
 
-async function handleApi(req, res, state, url) {
+async function handleApi(req, res, state, url, health) {
   if (req.method === "GET" && url.pathname === "/api/state") {
-    jsonResponse(res, 200, stateView(state));
+    jsonResponse(res, 200, stateView(state, health));
     return true;
   }
 
@@ -1368,7 +1435,7 @@ function startDashboard(readState, port, options = {}) {
       }
 
       if (url.pathname.startsWith("/api/")) {
-        const handled = await handleApi(req, res, state, url);
+        const handled = await handleApi(req, res, state, url, options.health);
         if (!handled) {
           jsonResponse(res, 404, { error: "Not found" });
         }
@@ -1383,6 +1450,16 @@ function startDashboard(readState, port, options = {}) {
   });
 
   const host = options.host || "127.0.0.1";
+  server.on("error", (error) => {
+    appendAuditLog({
+      source: "dashboard",
+      action: "server-error",
+      details: { message: error.message },
+    });
+    if (typeof options.onError === "function") {
+      options.onError(error);
+    }
+  });
   server.listen(port, host, () => {
     console.log(`Dashboard listening on http://${host}:${port}`);
   });

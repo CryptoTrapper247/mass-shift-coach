@@ -34,6 +34,7 @@ const config = {
   backupMirrorDir: process.env.BACKUP_MIRROR_DIR || "",
   monitorHeartbeatUrl: process.env.MONITOR_HEARTBEAT_URL || "",
   monitorHeartbeatMinutes: readNumber(process.env.MONITOR_HEARTBEAT_MINUTES, 5),
+  devAlertChannelId: process.env.DEV_ALERT_CHANNEL_ID || "",
 };
 
 if (!config.token) {
