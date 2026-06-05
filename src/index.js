@@ -26,6 +26,8 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
 
+let dashboardStarted = false;
+
 function getHealth() {
   return {
     ready: client.isReady(),
@@ -33,6 +35,21 @@ function getHealth() {
     guilds: client.guilds.cache.size,
     uptimeSeconds: Math.round(process.uptime()),
   };
+}
+
+function startLocalDashboard() {
+  if (dashboardStarted) {
+    return;
+  }
+  dashboardStarted = true;
+  startDashboard(readState, config.dashboardPort, {
+    adminPassword: config.dashboardAdminPassword,
+    health: getHealth,
+    host: config.dashboardHost,
+  });
+  if (!config.dashboardAdminPassword) {
+    console.warn("Dashboard auth is disabled because ADMIN_PASSWORD is not set.");
+  }
 }
 
 function zonedParts(date, timezone) {
@@ -279,14 +296,6 @@ async function registerCommands() {
 client.once("clientReady", async () => {
   console.log(`Logged in as ${client.user.tag}`);
   await registerCommands();
-  startDashboard(readState, config.dashboardPort, {
-    adminPassword: config.dashboardAdminPassword,
-    health: getHealth,
-    host: config.dashboardHost,
-  });
-  if (!config.dashboardAdminPassword) {
-    console.warn("Dashboard auth is disabled because ADMIN_PASSWORD is not set.");
-  }
   startScheduler();
   startAutomaticBackups();
   startHeartbeat(config, getHealth);
@@ -329,4 +338,5 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
+startLocalDashboard();
 client.login(config.token);

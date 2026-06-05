@@ -154,6 +154,7 @@ function defaultPrograms() {
 
 function defaultUserRecord() {
   return {
+    displayName: "",
     streak: 0,
     lastCheckInDate: null,
     lastWorkoutAt: null,
@@ -298,6 +299,26 @@ function appendAuditLog(event) {
   return entry;
 }
 
+function readAuditLog(limit = 50) {
+  if (!fs.existsSync(AUDIT_LOG_PATH)) {
+    return [];
+  }
+
+  return fs
+    .readFileSync(AUDIT_LOG_PATH, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .slice(-limit)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch (error) {
+        return { at: null, source: "system", action: "audit-parse-error", details: { line } };
+      }
+    })
+    .reverse();
+}
+
 function writeTextExport(filename, contents) {
   ensureDir(EXPORT_DIR);
   const filePath = path.join(EXPORT_DIR, `${filename}-${timestampLabel()}.csv`);
@@ -322,6 +343,13 @@ function getUserRecord(state, userId) {
     meals: state.users[userId].meals || [],
   };
 
+  for (const type of ["checkIns", "workouts", "meals"]) {
+    state.users[userId][type] = state.users[userId][type].map((entry, index) => ({
+      id: entry.id || `${type}-${String(entry.at || "entry").replace(/[^a-zA-Z0-9-]/g, "-")}-${index}`,
+      ...entry,
+    }));
+  }
+
   return state.users[userId];
 }
 
@@ -339,6 +367,7 @@ module.exports = {
   getUserRecord,
   mirrorBackup,
   pruneBackups,
+  readAuditLog,
   readState,
   writeBackup,
   writeTextExport,

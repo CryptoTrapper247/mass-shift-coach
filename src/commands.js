@@ -17,6 +17,7 @@ const { config } = require("./config");
 const {
   appendAuditLog,
   getUserRecord,
+  readAuditLog,
   readState,
   writeBackup,
   writeState,
@@ -146,6 +147,38 @@ const commandBuilders = [
     .setName("coach")
     .setDescription("Get your smartest next move from the bot right now."),
   new SlashCommandBuilder()
+    .setName("profile")
+    .setDescription("Set or review your Mass Shift display name.")
+    .addStringOption((option) =>
+      option.setName("display_name").setDescription("Name to show in summaries and dashboard.")
+    ),
+  new SlashCommandBuilder()
+    .setName("delete-log")
+    .setDescription("Delete one of your recent log entries.")
+    .addStringOption((option) =>
+      option
+        .setName("type")
+        .setDescription("Which log type to delete.")
+        .setRequired(true)
+        .addChoices(
+          { name: "Check-in", value: "checkin" },
+          { name: "Workout", value: "workout" },
+          { name: "Meal", value: "meal" }
+        )
+    )
+    .addIntegerOption((option) =>
+      option.setName("latest_number").setDescription("1 deletes the latest entry, 2 the previous, etc.")
+    )
+    .addUserOption((option) =>
+      option.setName("member").setDescription("Admin only: delete another member's entry.")
+    ),
+  new SlashCommandBuilder()
+    .setName("admin-activity")
+    .setDescription("Show recent Mass Shift admin/audit activity."),
+  new SlashCommandBuilder()
+    .setName("coach-settings")
+    .setDescription("Show server channels and schedule settings."),
+  new SlashCommandBuilder()
     .setName("set-bot-channel")
     .setDescription("Point bot chatter to a dedicated text channel.")
     .addChannelOption((option) =>
@@ -193,7 +226,11 @@ function getHelpText() {
     "`/member-summary` review another member",
     "`/leaderboard` compare server progress",
     "`/coach` get the smartest next move",
+    "`/profile` set your dashboard display name",
+    "`/delete-log` remove a mistaken recent log",
     "`/nudge` get a hard push",
+    "`/admin-activity` admin audit log",
+    "`/coach-settings` admin schedule/channel settings",
     "`/server-status` admin summary",
     "`/backup` admin JSON backup",
     "`/export` export weekly CSV",
@@ -239,6 +276,67 @@ function formatServerStatus(state) {
     `Reminder channels set: ${reminderChannels}`,
     `Bot channels set: ${botChannels}`,
     `Programs available: ${Object.keys(state.programs || {}).length}`,
+  ].join("\n");
+}
+
+function displayLabel(userId, record) {
+  return record.displayName || userId;
+}
+
+function collectionFor(type) {
+  return {
+    checkin: "checkIns",
+    workout: "workouts",
+    meal: "meals",
+  }[type];
+}
+
+function refreshRecordStats(record) {
+  const checkIns = [...record.checkIns].sort((a, b) => new Date(a.at) - new Date(b.at));
+  const workouts = [...record.workouts].sort((a, b) => new Date(a.at) - new Date(b.at));
+  const meals = [...record.meals].sort((a, b) => new Date(a.at) - new Date(b.at));
+  record.lastCheckInDate = checkIns.length ? String(checkIns[checkIns.length - 1].at).slice(0, 10) : null;
+  record.lastWorkoutAt = workouts.length ? workouts[workouts.length - 1].at : null;
+  record.lastMealAt = meals.length ? meals[meals.length - 1].at : null;
+  record.planProgressIndex = workouts.length;
+  const uniqueDates = [...new Set(checkIns.map((entry) => String(entry.at).slice(0, 10)))].sort().reverse();
+  let streak = 0;
+  let cursor = new Date();
+  for (const dateKey of uniqueDates) {
+    if (dateKey !== cursor.toISOString().slice(0, 10)) {
+      break;
+    }
+    streak += 1;
+    cursor = new Date(cursor.getTime() - 86400000);
+  }
+  record.streak = streak;
+}
+
+function formatActivity(limit = 8) {
+  const rows = readAuditLog(limit);
+  if (!rows.length) {
+    return "No audit activity yet.";
+  }
+
+  return rows
+    .map((entry) => {
+      const at = entry.at ? new Date(entry.at).toLocaleString() : "unknown time";
+      const action = [entry.source, entry.action].filter(Boolean).join("/");
+      return `${at} - ${action}${entry.targetId ? ` - ${entry.targetId}` : ""}`;
+    })
+    .join("\n");
+}
+
+function formatCoachSettings(state, guildId) {
+  const guildConfig = state.meta.guilds?.[guildId] || {};
+  return [
+    `Timezone: ${config.timezone}`,
+    `Wake reminder: ${String(config.wakeHour).padStart(2, "0")}:${String(config.wakeMinute).padStart(2, "0")}`,
+    `Evening nudge: ${String(config.eveningHour).padStart(2, "0")}:${String(config.eveningMinute).padStart(2, "0")}`,
+    `Weekly summary day/hour: ${config.weeklySummaryDay} @ ${config.weeklySummaryHour}:${String(config.weeklySummaryMinute).padStart(2, "0")}`,
+    `Bot channel: ${guildConfig.botChannelId ? `<#${guildConfig.botChannelId}>` : "not set"}`,
+    `Reminder channel: ${guildConfig.reminderChannelId ? `<#${guildConfig.reminderChannelId}>` : config.reminderChannelId || "not set"}`,
+    `Tracked members: ${Object.keys(state.users || {}).length}`,
   ].join("\n");
 }
 
@@ -351,7 +449,7 @@ async function handleInteraction(interaction) {
       await interaction.reply("```text\n" + formatStatus(record, state) + "\n```");
       return;
     case "summary":
-      await interaction.reply("```text\n" + formatWeeklySummary(interaction.user.username, record, state) + "\n```");
+      await interaction.reply("```text\n" + formatWeeklySummary(displayLabel(userId, record), record, state) + "\n```");
       return;
     case "member-summary": {
       const guard = adminGuard(interaction);
@@ -362,7 +460,7 @@ async function handleInteraction(interaction) {
       const member = interaction.options.getUser("member", true);
       const targetRecord = getUserRecord(state, member.id);
       writeState(state);
-      await interaction.reply("```text\n" + formatWeeklySummary(member.username, targetRecord, state) + "\n```");
+      await interaction.reply("```text\n" + formatWeeklySummary(displayLabel(member.id, targetRecord), targetRecord, state) + "\n```");
       return;
     }
     case "leaderboard": {
@@ -375,7 +473,7 @@ async function handleInteraction(interaction) {
         protein: "Average protein",
         shakes: "Weekly shakes",
       };
-      const lines = rows.map((row, index) => `${index + 1}. ${row.userId} - ${row.value}`);
+      const lines = rows.map((row, index) => `${index + 1}. ${displayLabel(row.userId, row.record)} - ${row.value}`);
       await interaction.reply(`**${labelMap[metric]} leaderboard**\n` + lines.join("\n"));
       return;
     }
@@ -383,8 +481,81 @@ async function handleInteraction(interaction) {
       await interaction.reply(getNudge(record));
       return;
     case "coach":
-      await interaction.reply("```text\n" + formatDailyAudit(record, state) + "\n\n" + formatWeeklySummary(interaction.user.username, record, state) + "\n```");
+      await interaction.reply("```text\n" + formatDailyAudit(record, state) + "\n\n" + formatWeeklySummary(displayLabel(userId, record), record, state) + "\n```");
       return;
+    case "profile": {
+      const displayName = interaction.options.getString("display_name");
+      if (displayName !== null) {
+        record.displayName = displayName.trim().slice(0, 80);
+        writeState(state);
+        appendAuditLog({
+          source: "discord",
+          actorId: interaction.user.id,
+          guildId: interaction.guildId,
+          action: "profile-update",
+          targetId: interaction.user.id,
+          details: { displayName: record.displayName },
+        });
+      }
+      await interaction.reply({
+        content: `Profile name: ${record.displayName || interaction.user.username}`,
+        ephemeral: true,
+      });
+      return;
+    }
+    case "delete-log": {
+      const type = interaction.options.getString("type", true);
+      const member = interaction.options.getUser("member");
+      if (member && member.id !== interaction.user.id) {
+        const guard = adminGuard(interaction);
+        if (guard) {
+          await interaction.reply(guard);
+          return;
+        }
+      }
+      const targetId = member?.id || interaction.user.id;
+      const targetRecord = getUserRecord(state, targetId);
+      const collectionName = collectionFor(type);
+      const collection = targetRecord[collectionName];
+      const latestNumber = Math.max(1, interaction.options.getInteger("latest_number") || 1);
+      const sorted = [...collection].sort((a, b) => new Date(b.at) - new Date(a.at));
+      const entry = sorted[latestNumber - 1];
+      if (!entry) {
+        await interaction.reply({ content: `No ${type} entry found at that position.`, ephemeral: true });
+        return;
+      }
+      targetRecord[collectionName] = collection.filter((item) => item.id !== entry.id);
+      refreshRecordStats(targetRecord);
+      writeState(state);
+      appendAuditLog({
+        source: "discord",
+        actorId: interaction.user.id,
+        guildId: interaction.guildId,
+        action: `${type}-delete`,
+        targetId,
+        details: { entryId: entry.id },
+      });
+      await interaction.reply({ content: `Deleted ${type} entry for ${displayLabel(targetId, targetRecord)}.`, ephemeral: true });
+      return;
+    }
+    case "admin-activity": {
+      const guard = adminGuard(interaction);
+      if (guard) {
+        await interaction.reply(guard);
+        return;
+      }
+      await interaction.reply({ content: "```text\n" + formatActivity(10) + "\n```", ephemeral: true });
+      return;
+    }
+    case "coach-settings": {
+      const guard = adminGuard(interaction);
+      if (guard) {
+        await interaction.reply(guard);
+        return;
+      }
+      await interaction.reply({ content: "```text\n" + formatCoachSettings(state, interaction.guildId) + "\n```", ephemeral: true });
+      return;
+    }
     case "set-bot-channel": {
       const guard = adminGuard(interaction);
       if (guard) {

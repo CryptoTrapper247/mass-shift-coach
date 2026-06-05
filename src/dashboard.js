@@ -14,6 +14,7 @@ const {
 const {
   appendAuditLog,
   getUserRecord,
+  readAuditLog,
   writeBackup,
   writeState,
   writeTextExport,
@@ -123,10 +124,48 @@ function parseOptionalNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function memberLabel(userId, record) {
+  return record.displayName || `Member ${userId}`;
+}
+
+function logCollectionName(type) {
+  return {
+    checkin: "checkIns",
+    workout: "workouts",
+    meal: "meals",
+  }[type];
+}
+
+function refreshRecordStats(record) {
+  const checkIns = [...record.checkIns].sort((a, b) => new Date(a.at) - new Date(b.at));
+  const workouts = [...record.workouts].sort((a, b) => new Date(a.at) - new Date(b.at));
+  const meals = [...record.meals].sort((a, b) => new Date(a.at) - new Date(b.at));
+
+  record.lastCheckInDate = checkIns.length ? String(checkIns[checkIns.length - 1].at).slice(0, 10) : null;
+  record.lastWorkoutAt = workouts.length ? workouts[workouts.length - 1].at : null;
+  record.lastMealAt = meals.length ? meals[meals.length - 1].at : null;
+  record.planProgressIndex = workouts.length;
+
+  const uniqueDates = [...new Set(checkIns.map((entry) => String(entry.at).slice(0, 10)))].sort().reverse();
+  let streak = 0;
+  let cursor = new Date();
+  for (const dateKey of uniqueDates) {
+    const expected = cursor.toISOString().slice(0, 10);
+    if (dateKey !== expected) {
+      break;
+    }
+    streak += 1;
+    cursor = new Date(cursor.getTime() - 86400000);
+  }
+  record.streak = streak;
+}
+
 function memberView(userId, record, state) {
   const summary = summarizeWeek(record);
   return {
     userId,
+    displayName: record.displayName || "",
+    label: memberLabel(userId, record),
     streak: record.streak,
     profile: record.profile,
     summary,
@@ -137,7 +176,7 @@ function memberView(userId, record, state) {
     },
     dailyAudit: formatDailyAudit(record, state),
     todayPlan: formatTodayPlan(record, state),
-    weeklySummary: formatWeeklySummary(userId, record, state),
+    weeklySummary: formatWeeklySummary(memberLabel(userId, record), record, state),
   };
 }
 
@@ -146,6 +185,7 @@ function stateView(state) {
   return {
     meta: state.meta,
     programs: state.programs,
+    activity: readAuditLog(30),
     members,
     counts: {
       users: members.length,
@@ -592,6 +632,20 @@ function renderHtml() {
       font-size: 13px;
       margin-bottom: 4px;
     }
+    .log-actions {
+      display: flex;
+      gap: 7px;
+      margin-top: 8px;
+    }
+    .log-actions button {
+      min-height: 28px;
+      padding: 5px 9px;
+      font-size: 12px;
+    }
+    .danger {
+      border-color: rgba(255, 122, 112, 0.42);
+      color: var(--danger);
+    }
     .log-item span, .empty {
       color: var(--muted);
       font-size: 13px;
@@ -671,6 +725,21 @@ function renderHtml() {
         <article class="stat"><span>Meals</span><strong id="countMeals">0</strong></article>
         <article class="stat"><span>Programs</span><strong id="countPrograms">0</strong></article>
         <article class="stat"><span>Configs</span><strong id="countConfigs">0</strong></article>
+
+        <section class="panel span-3">
+          <h3>Profile</h3>
+          <form id="profileForm" class="form-grid">
+            <label class="full">Display name
+              <input name="displayName" placeholder="Jordan, Client 1, etc." />
+            </label>
+            <button class="primary full" type="submit">Save profile</button>
+          </form>
+        </section>
+
+        <section class="panel span-3">
+          <h3>Admin Activity</h3>
+          <div class="log" id="activityLog"></div>
+        </section>
 
         <section class="panel span-3">
           <h3>Goals</h3>
@@ -841,6 +910,23 @@ function renderHtml() {
       form.programName.value = profile.programName || "mass-4-day";
     }
 
+    function fillProfile(member) {
+      $("profileForm").displayName.value = member?.displayName || "";
+    }
+
+    function renderActivity(items) {
+      const target = $("activityLog");
+      if (!items?.length) {
+        target.innerHTML = '<div class="empty">No admin activity yet.</div>';
+        return;
+      }
+      target.innerHTML = items.map((item) => {
+        const label = [item.source, item.action].filter(Boolean).join(" / ");
+        const targetId = item.targetId ? '<span>Target: ' + escHtml(item.targetId) + '</span>' : '';
+        return '<div class="log-item"><b>' + escHtml(formatDate(item.at)) + '</b><span>' + escHtml(label) + '</span>' + targetId + '</div>';
+      }).join("");
+    }
+
     function render() {
       const data = state.data;
       const health = state.health;
@@ -870,7 +956,7 @@ function renderHtml() {
       $("members").innerHTML = members.length
         ? members.map((member) => {
           const active = member.userId === state.selectedUserId ? " active" : "";
-          return '<button class="member' + active + '" data-user-id="' + escHtml(member.userId) + '"><strong>' + escHtml(member.userId) + '</strong><span>' + member.summary.workouts + ' workouts | ' + member.summary.shakes + ' shakes | streak ' + member.streak + '</span></button>';
+          return '<button class="member' + active + '" data-user-id="' + escHtml(member.userId) + '"><strong>' + escHtml(member.label) + '</strong><span>' + escHtml(member.userId) + ' | ' + member.summary.workouts + ' workouts | ' + member.summary.shakes + ' shakes | streak ' + member.streak + '</span></button>';
         }).join("")
         : '<div class="empty">No members tracked yet. Add a Discord user ID or use slash commands in Discord.</div>';
 
@@ -882,25 +968,31 @@ function renderHtml() {
       });
 
       const member = selectedMember();
-      $("title").textContent = member ? "Member " + member.userId : "Control Panel";
+      $("title").textContent = member ? member.label : "Control Panel";
       $("subtitle").textContent = member
         ? "Latest weight " + (member.summary.latestWeight ?? "-") + " lb | weekly workouts " + member.summary.workouts
         : "Add a member or log from Discord to start tracking.";
 
+      fillProfile(member);
       fillGoals(member);
+      renderActivity(data.activity);
       $("weeklySummary").textContent = member ? member.weeklySummary : "Select or add a member.";
       $("dailyAudit").textContent = member ? member.dailyAudit : "Select or add a member.";
       $("todayPlan").textContent = member ? member.todayPlan : "Select or add a member.";
 
       renderLog("checkinLog", member?.latest.checkIns || [], (item) =>
-        '<b>' + escHtml(formatDate(item.at)) + '</b><span>' + escHtml(item.weight) + ' lb' + (item.notes ? ' | ' + escHtml(item.notes) : '') + '</span>'
+        '<b>' + escHtml(formatDate(item.at)) + '</b><span>' + escHtml(item.weight) + ' lb' + (item.notes ? ' | ' + escHtml(item.notes) : '') + '</span>' + logActions("checkin", item.id)
       );
       renderLog("workoutLog", member?.latest.workouts || [], (item) =>
-        '<b>' + escHtml(formatDate(item.at)) + '</b><span>' + escHtml(item.note) + (item.durationMinutes ? ' | ' + escHtml(item.durationMinutes) + ' min' : '') + '</span>'
+        '<b>' + escHtml(formatDate(item.at)) + '</b><span>' + escHtml(item.note) + (item.durationMinutes ? ' | ' + escHtml(item.durationMinutes) + ' min' : '') + '</span>' + logActions("workout", item.id)
       );
       renderLog("mealLog", member?.latest.meals || [], (item) =>
-        '<b>' + escHtml(formatDate(item.at)) + ' | ' + escHtml(item.type) + '</b><span>' + (item.calories || 0) + ' kcal | ' + (item.protein || 0) + 'g protein' + (item.note ? ' | ' + escHtml(item.note) : '') + '</span>'
+        '<b>' + escHtml(formatDate(item.at)) + ' | ' + escHtml(item.type) + '</b><span>' + (item.calories || 0) + ' kcal | ' + (item.protein || 0) + 'g protein' + (item.note ? ' | ' + escHtml(item.note) : '') + '</span>' + logActions("meal", item.id)
       );
+    }
+
+    function logActions(type, id) {
+      return '<div class="log-actions"><button data-log-action="edit" data-log-type="' + escHtml(type) + '" data-log-id="' + escHtml(id) + '">Edit</button><button class="danger" data-log-action="delete" data-log-type="' + escHtml(type) + '" data-log-id="' + escHtml(id) + '">Delete</button></div>';
     }
 
     function escHtml(value) {
@@ -928,6 +1020,56 @@ function renderHtml() {
       return state.selectedUserId;
     }
 
+    function findLogEntry(type, id) {
+      const member = selectedMember();
+      const key = type === "checkin" ? "checkIns" : type === "workout" ? "workouts" : "meals";
+      return member?.latest[key]?.find((entry) => entry.id === id) || null;
+    }
+
+    async function editLog(type, id) {
+      const item = findLogEntry(type, id);
+      if (!item) throw new Error("Log entry not found");
+      let payload = {};
+
+      if (type === "checkin") {
+        const weight = prompt("Weight", item.weight ?? "");
+        if (weight === null) return;
+        const notes = prompt("Notes", item.notes || "");
+        if (notes === null) return;
+        payload = { weight, notes };
+      } else if (type === "workout") {
+        const note = prompt("Training note", item.note || "");
+        if (note === null) return;
+        const durationMinutes = prompt("Duration minutes", item.durationMinutes || "");
+        if (durationMinutes === null) return;
+        payload = { note, durationMinutes };
+      } else {
+        const calories = prompt("Calories", item.calories || "");
+        if (calories === null) return;
+        const protein = prompt("Protein", item.protein || "");
+        if (protein === null) return;
+        const note = prompt("Note", item.note || "");
+        if (note === null) return;
+        payload = { type: item.type, calories, protein, note };
+      }
+
+      await api("/api/member/" + encodeURIComponent(requireMember()) + "/" + type + "/" + encodeURIComponent(id), {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      await load();
+      showNotice("Log entry updated.");
+    }
+
+    async function deleteLog(type, id) {
+      if (!confirm("Delete this " + type + " entry?")) return;
+      await api("/api/member/" + encodeURIComponent(requireMember()) + "/" + type + "/" + encodeURIComponent(id), {
+        method: "DELETE",
+      });
+      await load();
+      showNotice("Log entry deleted.");
+    }
+
     async function submitForm(form, action) {
       try {
         await action(new FormData(form));
@@ -949,6 +1091,26 @@ function renderHtml() {
         $("newUserId").value = "";
         await load();
         showNotice("Member added.");
+      } catch (error) {
+        showNotice(error.message, true);
+      }
+    });
+    $("profileForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+      submitForm(event.currentTarget, (form) => api("/api/member/" + encodeURIComponent(requireMember()) + "/profile", {
+        method: "POST",
+        body: JSON.stringify({ displayName: form.get("displayName") }),
+      }));
+    });
+    document.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-log-action]");
+      if (!button) return;
+      try {
+        if (button.dataset.logAction === "edit") {
+          await editLog(button.dataset.logType, button.dataset.logId);
+        } else {
+          await deleteLog(button.dataset.logType, button.dataset.logId);
+        }
       } catch (error) {
         showNotice(error.message, true);
       }
@@ -1060,6 +1222,67 @@ async function handleApi(req, res, state, url) {
     return true;
   }
 
+  const logMatch = url.pathname.match(/^\/api\/member\/([^/]+)\/(checkin|workout|meal)\/([^/]+)$/);
+  if (logMatch) {
+    const userId = decodeURIComponent(logMatch[1]);
+    const type = logMatch[2];
+    const entryId = decodeURIComponent(logMatch[3]);
+    const record = getUserRecord(state, userId);
+    const collectionName = logCollectionName(type);
+    const collection = record[collectionName];
+    const index = collection.findIndex((entry) => entry.id === entryId);
+
+    if (index < 0) {
+      jsonResponse(res, 404, { error: "Log entry not found" });
+      return true;
+    }
+
+    if (req.method === "DELETE") {
+      collection.splice(index, 1);
+      refreshRecordStats(record);
+      writeState(state);
+      auditDashboard(req, `${type}-delete`, userId, { entryId });
+      jsonResponse(res, 200, { member: memberView(userId, record, state) });
+      return true;
+    }
+
+    if (req.method !== "POST") {
+      jsonResponse(res, 405, { error: "Method not allowed" });
+      return true;
+    }
+
+    const body = await readBody(req);
+    const entry = collection[index];
+    if (type === "checkin") {
+      const weight = parseOptionalNumber(body.weight);
+      if (!weight) {
+        jsonResponse(res, 400, { error: "Weight is required" });
+        return true;
+      }
+      entry.weight = weight;
+      entry.notes = body.notes || "";
+    } else if (type === "workout") {
+      const note = String(body.note || "").trim();
+      if (!note) {
+        jsonResponse(res, 400, { error: "Workout note is required" });
+        return true;
+      }
+      entry.note = note;
+      entry.durationMinutes = parseOptionalNumber(body.durationMinutes);
+    } else {
+      entry.type = body.type === "shake" ? "shake" : "meal";
+      entry.calories = parseOptionalNumber(body.calories);
+      entry.protein = parseOptionalNumber(body.protein);
+      entry.note = body.note || "";
+    }
+
+    refreshRecordStats(record);
+    writeState(state);
+    auditDashboard(req, `${type}-update`, userId, { entryId });
+    jsonResponse(res, 200, { member: memberView(userId, record, state) });
+    return true;
+  }
+
   const memberMatch = url.pathname.match(/^\/api\/member\/([^/]+)(?:\/([^/]+))?$/);
   if (!memberMatch) {
     return false;
@@ -1080,7 +1303,10 @@ async function handleApi(req, res, state, url) {
   }
 
   const body = await readBody(req);
-  if (action === "goals") {
+  if (action === "profile") {
+    record.displayName = String(body.displayName || "").trim().slice(0, 80);
+    auditDashboard(req, "profile-update", userId, { displayName: record.displayName });
+  } else if (action === "goals") {
     record.profile.targetWeight = parseOptionalNumber(body.targetWeight);
     record.profile.dailyCalories = parseOptionalNumber(body.dailyCalories);
     record.profile.dailyProtein = parseOptionalNumber(body.dailyProtein);

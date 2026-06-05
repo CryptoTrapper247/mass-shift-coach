@@ -31,6 +31,10 @@ function formatNumber(value, suffix = "") {
   return `${value}${suffix}`;
 }
 
+function entryId(prefix, at = new Date().toISOString()) {
+  return `${prefix}-${at.replace(/[^a-zA-Z0-9-]/g, "-")}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function updateCheckIn(record, weight, notes, at = new Date().toISOString()) {
   const today = isoDate();
   if (record.lastCheckInDate !== today) {
@@ -40,13 +44,14 @@ function updateCheckIn(record, weight, notes, at = new Date().toISOString()) {
   }
 
   record.lastCheckInDate = today;
-  record.checkIns.push({ at, weight, notes: notes || "" });
+  record.checkIns.push({ id: entryId("checkin", at), at, weight, notes: notes || "" });
   return record.streak;
 }
 
 function logWorkout(record, note, durationMinutes, at = new Date().toISOString()) {
   record.lastWorkoutAt = at;
   record.workouts.push({
+    id: entryId("workout", at),
     at,
     note,
     durationMinutes: durationMinutes || null,
@@ -57,6 +62,7 @@ function logWorkout(record, note, durationMinutes, at = new Date().toISOString()
 function logMeal(record, type, calories, protein, note, at = new Date().toISOString()) {
   record.lastMealAt = at;
   record.meals.push({
+    id: entryId("meal", at),
     at,
     type,
     calories: calories || null,
@@ -291,7 +297,7 @@ function formatWeeklySummary(userLabel, record, state) {
   const nextPlan = getNextPlanDay(record, state);
 
   return [
-    `Weekly summary for ${userLabel}`,
+    `Weekly summary for ${record.displayName || userLabel}`,
     `Weight: ${formatNumber(summary.latestWeight, " lb")} (${formatNumber(summary.weightDelta, " lb")} this week)`,
     `Workouts: ${summary.workouts} | Check-ins: ${summary.checkIns} | Shakes: ${summary.shakes}`,
     `Calories: ${formatNumber(summary.avgCalories, " kcal/day")} | Protein: ${formatNumber(summary.avgProtein, " g/day")}`,
