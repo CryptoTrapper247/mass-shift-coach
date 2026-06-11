@@ -27,6 +27,11 @@ const client = new Client({
 });
 
 let dashboardStarted = false;
+let schedulerStarted = false;
+let automaticBackupsStarted = false;
+let heartbeatStarted = false;
+let loginRetryTimer = null;
+let loginAttempt = 0;
 
 function getHealth() {
   return {
@@ -270,6 +275,11 @@ async function tickSchedules() {
 }
 
 function startScheduler() {
+  if (schedulerStarted) {
+    return;
+  }
+  schedulerStarted = true;
+
   tickSchedules().catch((error) => {
     console.error("Initial schedule tick failed:", error);
   });
@@ -303,6 +313,11 @@ function runAutomaticBackup() {
 }
 
 function startAutomaticBackups() {
+  if (automaticBackupsStarted) {
+    return;
+  }
+  automaticBackupsStarted = true;
+
   const hours = Number(config.automaticBackupHours);
   if (!Number.isFinite(hours) || hours <= 0) {
     console.log("Automatic backups disabled.");
@@ -322,6 +337,42 @@ function startAutomaticBackups() {
   }, hours * 60 * 60 * 1000);
 }
 
+function startExternalHeartbeat() {
+  if (heartbeatStarted) {
+    return;
+  }
+  heartbeatStarted = true;
+  startHeartbeat(config, getHealth);
+}
+
+function scheduleDiscordLogin(delayMs = 0) {
+  if (client.isReady() || loginRetryTimer) {
+    return;
+  }
+
+  loginRetryTimer = setTimeout(async () => {
+    loginRetryTimer = null;
+    if (client.isReady()) {
+      return;
+    }
+
+    loginAttempt += 1;
+    try {
+      await client.login(config.token);
+    } catch (error) {
+      const message = error?.message || String(error);
+      appendAuditLog({
+        source: "discord",
+        action: "login-failed",
+        details: { message, attempt: loginAttempt },
+      });
+      console.error(`Discord login attempt ${loginAttempt} failed:`, error);
+      const retryDelay = Math.min(5 * 60 * 1000, 15 * 1000 * (2 ** Math.min(loginAttempt - 1, 5)));
+      scheduleDiscordLogin(retryDelay);
+    }
+  }, delayMs);
+}
+
 async function registerCommands() {
   const definitions = commandData();
   await Promise.all(
@@ -333,12 +384,15 @@ async function registerCommands() {
 }
 
 client.once("clientReady", async () => {
+  loginAttempt = 0;
+  if (loginRetryTimer) {
+    clearTimeout(loginRetryTimer);
+    loginRetryTimer = null;
+  }
   console.log(`Logged in as ${client.user.tag}`);
   await registerCommands();
   await sendDevAlert("Bot restarted", `${client.user.tag} is online on ${client.guilds.cache.size} server(s).`);
   startScheduler();
-  startAutomaticBackups();
-  startHeartbeat(config, getHealth);
 });
 
 process.on("unhandledRejection", (error) => {
@@ -399,11 +453,6 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 startLocalDashboard();
-client.login(config.token).catch((error) => {
-  appendAuditLog({
-    source: "discord",
-    action: "login-failed",
-    details: { message: error?.message || String(error) },
-  });
-  console.error("Discord login failed:", error);
-});
+startAutomaticBackups();
+startExternalHeartbeat();
+scheduleDiscordLogin();
